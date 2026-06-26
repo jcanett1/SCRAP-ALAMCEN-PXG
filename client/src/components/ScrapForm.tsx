@@ -89,6 +89,8 @@ const FIELDS: FieldConfig[] = [
 export function ScrapForm({ onSubmit, isLoading, tableLabel }: ScrapFormProps) {
   // Estado para la hora en vivo (se actualiza cada segundo)
   const [currentTime, setCurrentTime] = useState(getCurrentTimeAZ());
+  // Fecha seleccionada por el usuario (estado local independiente del form)
+  const [selectedDate, setSelectedDate] = useState(getTodayAZ());
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -97,46 +99,65 @@ export function ScrapForm({ onSubmit, isLoading, tableLabel }: ScrapFormProps) {
     return () => clearInterval(interval);
   }, []);
 
+  const EMPTY_VALUES: ScrapFormValues = {
+    num_orden: "",
+    hora: buildHoraValue(getTodayAZ(), getCurrentTimeAZ()),
+    serial_number: "",
+    inventory_id: "",
+    qty: "",
+    reason: "",
+    reason_code: "",
+    description: "",
+    celda: "",
+    supervisor: "",
+    autorizo: "",
+    captura: "",
+  };
+
   const {
     register,
     handleSubmit,
     reset,
     control,
     setValue,
-    watch,
     formState: { errors },
   } = useForm<ScrapFormValues>({
     resolver: zodResolver(scrapFormSchema),
     defaultValues: {
+      ...EMPTY_VALUES,
       hora: buildHoraValue(getTodayAZ(), getCurrentTimeAZ()),
     },
   });
 
-  // Fecha seleccionada (extraída del valor compuesto)
-  const horaValue = watch("hora") ?? "";
-  const selectedDate = horaValue.split(" ")[0] ?? getTodayAZ();
+  // Sincronizar la hora automáticamente cada segundo usando el estado local de fecha
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setValue("hora", buildHoraValue(selectedDate, getCurrentTimeAZ()));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [setValue, selectedDate]);
 
-  // Cuando cambia la fecha, reconstruir el valor con la hora actual
+  // Cuando cambia la fecha, actualizar estado local y el campo oculto
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSelectedDate(e.target.value);
     setValue("hora", buildHoraValue(e.target.value, getCurrentTimeAZ()), {
       shouldValidate: true,
     });
   };
 
-  // Sincronizar la hora automáticamente cada segundo
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const date = watch("hora")?.split(" ")[0] ?? getTodayAZ();
-      setValue("hora", buildHoraValue(date, getCurrentTimeAZ()));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [setValue, watch]);
+  // Limpiar todos los campos y resetear la fecha al día actual
+  const handleClear = () => {
+    const today = getTodayAZ();
+    setSelectedDate(today);
+    reset({
+      ...EMPTY_VALUES,
+      hora: buildHoraValue(today, getCurrentTimeAZ()),
+    });
+  };
 
   const handleFormSubmit = async (data: ScrapFormValues) => {
     await onSubmit(data);
-    reset({
-      hora: buildHoraValue(getTodayAZ(), getCurrentTimeAZ()),
-    });
+    handleClear();
   };
 
   const colClass = (span?: string) => {
@@ -165,7 +186,7 @@ export function ScrapForm({ onSubmit, isLoading, tableLabel }: ScrapFormProps) {
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => reset({ hora: buildHoraValue(getTodayAZ(), getCurrentTimeAZ()) })}
+            onClick={handleClear}
             disabled={isLoading}
             className="text-muted-foreground hover:text-foreground gap-1.5"
           >
