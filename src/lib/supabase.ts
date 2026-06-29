@@ -54,6 +54,22 @@ export async function listScrap(
   return (data ?? []) as ScrapRecord[];
 }
 
+export async function listScrapByDate(
+  table: "scrap_pxg_componentes_proceso" | "scrap_pxg_componentes_proveedor",
+  dateFrom: string,
+  dateTo: string
+): Promise<ScrapRecord[]> {
+  // El campo hora contiene "YYYY-MM-DD HH:MM" — filtramos por prefijo de fecha
+  const { data, error } = await supabase
+    .from(table)
+    .select("*")
+    .gte("hora", dateFrom)
+    .lte("hora", dateTo + " 23:59")
+    .order("id", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ScrapRecord[];
+}
+
 export async function searchInventory(
   query: string,
   limit = 30,

@@ -2,36 +2,28 @@ import { useState } from "react";
 import { Toaster, toast } from "sonner";
 import { ScrapForm, type FormValues } from "./components/ScrapForm";
 import { RecordsTable } from "./components/RecordsTable";
+import { StatsPage } from "./components/StatsPage";
 import { insertScrap } from "./lib/supabase";
-import { BarChart2, Truck, Activity } from "lucide-react";
+import { BarChart2, Truck, Activity, LineChart } from "lucide-react";
 
-type Tab = "proceso" | "proveedor";
+type Tab = "proceso" | "proveedor" | "estadisticas";
 
-// Colores por pestaña: Proceso = azul, Proveedor = naranja/ámbar
+// Colores por pestaña
 const TAB_COLORS = {
   proceso: {
     accent:      "#2f81f7",
     accentLight: "rgba(47,129,247,0.12)",
     accentBorder:"rgba(47,129,247,0.5)",
-    badge:       "bg-blue-500/15 text-blue-400 border border-blue-500/30",
-    tabActive:   "border-blue-400 text-blue-400 bg-blue-500/8",
-    tabHover:    "hover:text-blue-300 hover:border-blue-500/40",
-    iconBg:      "bg-blue-500/12",
-    iconColor:   "text-blue-400",
-    headerBg:    "bg-blue-500/6",
-    pill:        "bg-blue-500 text-white",
   },
   proveedor: {
     accent:      "#f0883e",
     accentLight: "rgba(240,136,62,0.12)",
     accentBorder:"rgba(240,136,62,0.5)",
-    badge:       "bg-orange-500/15 text-orange-400 border border-orange-500/30",
-    tabActive:   "border-orange-400 text-orange-400 bg-orange-500/8",
-    tabHover:    "hover:text-orange-300 hover:border-orange-500/40",
-    iconBg:      "bg-orange-500/12",
-    iconColor:   "text-orange-400",
-    headerBg:    "bg-orange-500/6",
-    pill:        "bg-orange-500 text-white",
+  },
+  estadisticas: {
+    accent:      "#3fb950",
+    accentLight: "rgba(63,185,80,0.12)",
+    accentBorder:"rgba(63,185,80,0.5)",
   },
 } as const;
 
@@ -39,7 +31,7 @@ const TABS: {
   id: Tab;
   label: string;
   icon: (color: string) => React.ReactNode;
-  table: "scrap_pxg_componentes_proceso" | "scrap_pxg_componentes_proveedor";
+  table?: "scrap_pxg_componentes_proceso" | "scrap_pxg_componentes_proveedor";
 }[] = [
   {
     id: "proceso",
@@ -53,6 +45,11 @@ const TABS: {
     icon: (color) => <Truck className="w-4 h-4" style={{ color }} />,
     table: "scrap_pxg_componentes_proveedor",
   },
+  {
+    id: "estadisticas",
+    label: "Estadísticas",
+    icon: (color) => <LineChart className="w-4 h-4" style={{ color }} />,
+  },
 ];
 
 export default function App() {
@@ -64,6 +61,7 @@ export default function App() {
   const colors  = TAB_COLORS[activeTab];
 
   const handleSubmit = async (data: FormValues) => {
+    if (!current.table) return;
     setLoading(true);
     try {
       await insertScrap(current.table, { ...data, qty: Number(data.qty) });
@@ -114,7 +112,7 @@ export default function App() {
       <nav className="border-b border-[var(--border)] bg-[var(--surface)]">
         <div className="max-w-5xl mx-auto px-4 flex gap-1">
           {TABS.map(tab => {
-            const c      = TAB_COLORS[tab.id];
+            const c        = TAB_COLORS[tab.id];
             const isActive = activeTab === tab.id;
             return (
               <button
@@ -129,17 +127,13 @@ export default function App() {
                   relative flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all duration-200 rounded-t-md
                   ${isActive
                     ? "border-b-2"
-                    : `border-transparent text-[var(--text-muted)] hover:bg-[var(--surface2)] ${c.tabHover}`}
+                    : "border-transparent text-[var(--text-muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"}
                 `}
               >
-                {/* Ícono con color de la pestaña */}
                 <span style={{ color: isActive ? c.accent : undefined }}>
                   {tab.icon(isActive ? c.accent : "#8b949e")}
                 </span>
-
                 {tab.label}
-
-                {/* Indicador de pestaña activa */}
                 {isActive && (
                   <span
                     className="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
@@ -163,7 +157,7 @@ export default function App() {
       {/* Contenido */}
       <main className="max-w-5xl mx-auto px-4 py-6">
 
-        {/* Título de sección con badge de color */}
+        {/* Título de sección */}
         <div
           className="flex items-center gap-3 mb-6 p-4 rounded-xl border transition-all duration-300"
           style={{ background: colors.accentLight, borderColor: colors.accentBorder }}
@@ -180,47 +174,48 @@ export default function App() {
                 className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider"
                 style={{ background: colors.accent, color: "#fff" }}
               >
-                {activeTab === "proceso" ? "Proceso" : "Proveedor"}
+                {activeTab === "proceso" ? "Proceso" : activeTab === "proveedor" ? "Proveedor" : "Analytics"}
               </span>
             </div>
             <p className="text-xs text-[var(--text-muted)] mt-0.5">
-              Tabla:{" "}
-              <span className="font-mono" style={{ color: colors.accent }}>{current.table}</span>
+              {activeTab === "estadisticas"
+                ? "Consulta estadísticas por rango de fechas y descarga reportes"
+                : <>Tabla: <span className="font-mono" style={{ color: colors.accent }}>{current.table}</span></>
+              }
             </p>
           </div>
         </div>
 
-        {/* Formulario */}
-        <div
-          className="card border transition-all duration-300"
-          style={{ borderColor: colors.accentBorder }}
-        >
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-2">
-              <div
-                className="w-1 h-6 rounded-full"
-                style={{ background: colors.accent }}
-              />
-              <div>
-                <h3 className="text-sm font-semibold text-[var(--text)]">Nuevo Registro</h3>
-                <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                  Tabla:{" "}
-                  <span className="font-mono" style={{ color: colors.accent }}>{current.table}</span>
-                </p>
-              </div>
-            </div>
-          </div>
-          <ScrapForm
-            key={activeTab}
-            onSubmit={handleSubmit}
-            isLoading={loading}
-            tableLabel={current.label}
-            accentColor={colors.accent}
-          />
-        </div>
+        {/* Pestaña de Estadísticas */}
+        {activeTab === "estadisticas" && <StatsPage />}
 
-        {/* Tabla de registros */}
-        <RecordsTable table={current.table} refreshKey={refreshKey} accentColor={colors.accent} />
+        {/* Pestañas de captura */}
+        {activeTab !== "estadisticas" && current.table && (
+          <>
+            <div
+              className="card border transition-all duration-300"
+              style={{ borderColor: colors.accentBorder }}
+            >
+              <div className="flex items-center gap-2 mb-5">
+                <div className="w-1 h-6 rounded-full" style={{ background: colors.accent }} />
+                <div>
+                  <h3 className="text-sm font-semibold text-[var(--text)]">Nuevo Registro</h3>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                    Tabla: <span className="font-mono" style={{ color: colors.accent }}>{current.table}</span>
+                  </p>
+                </div>
+              </div>
+              <ScrapForm
+                key={activeTab}
+                onSubmit={handleSubmit}
+                isLoading={loading}
+                tableLabel={current.label}
+                accentColor={colors.accent}
+              />
+            </div>
+            <RecordsTable table={current.table} refreshKey={refreshKey} accentColor={colors.accent} />
+          </>
+        )}
       </main>
 
       <footer className="text-center py-6 text-xs text-[var(--text-muted)] border-t border-[var(--border)] mt-8">

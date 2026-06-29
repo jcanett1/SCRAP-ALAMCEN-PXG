@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { listScrap, type ScrapRecord } from "@/lib/supabase";
-import { RefreshCw, Database, Loader2 } from "lucide-react";
+import { RefreshCw, Database, Loader2, FileSpreadsheet, FileText } from "lucide-react";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 interface Props {
   table: "scrap_pxg_componentes_proceso" | "scrap_pxg_componentes_proveedor";
@@ -8,6 +11,53 @@ interface Props {
   accentColor: string;
 }
 
+// ── Helpers de exportación ────────────────────────────────────────────────────
+function downloadExcel(records: ScrapRecord[], tableName: string) {
+  const headers = ["ID","Orden","Fecha/Hora","Serial","Inventory ID","QTY","Código","Defecto","Descripción","Celda","Supervisor","Autorizó","Captura"];
+  const rows = records.map(r => [r.id, r.num_orden, r.hora, r.serial_number, r.inventory_id, r.qty, r.reason_code, r.reason, r.description, r.celda, r.supervisor, r.autorizo, r.captura]);
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  // Ancho de columnas
+  ws["!cols"] = [6,14,16,14,14,6,8,28,28,10,12,10,12].map(w => ({ wch: w }));
+  XLSX.utils.book_append_sheet(wb, ws, tableName.replace("scrap_pxg_componentes_","").toUpperCase());
+  XLSX.writeFile(wb, `${tableName}_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+function downloadPDF(records: ScrapRecord[], tableName: string, accentColor: string) {
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const label = tableName.includes("proceso") ? "SCRAP PROCESO" : "SCRAP PROVEEDOR";
+
+  // Fondo oscuro
+  doc.setFillColor(15, 23, 42);
+  doc.rect(0, 0, 297, 210, "F");
+
+  // Encabezado
+  const rgb = accentColor === "#2f81f7" ? [47,129,247] : [240,136,62];
+  doc.setFillColor(rgb[0], rgb[1], rgb[2]);
+  doc.rect(0, 0, 297, 18, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(13);
+  doc.setFont("helvetica", "bold");
+  doc.text(`PXG SCRAP SYSTEM — ${label}`, 14, 12);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Generado: ${new Date().toLocaleString("es-MX")} | ${records.length} registros`, 297 - 14, 12, { align: "right" });
+
+  autoTable(doc, {
+    startY: 22,
+    head: [["ID","Orden","Fecha/Hora","Serial","Inv. ID","QTY","Código","Defecto","Celda","Supervisor","Autorizó","Captura"]],
+    body: records.map(r => [r.id, r.num_orden, r.hora, r.serial_number, r.inventory_id, r.qty, r.reason_code, r.reason, r.celda, r.supervisor, r.autorizo, r.captura]),
+    theme: "grid",
+    styles: { fontSize: 7, textColor: [230,237,243], fillColor: [22,33,62], lineColor: [48,54,61] },
+    headStyles: { fillColor: rgb as [number,number,number], textColor: [255,255,255], fontStyle: "bold" },
+    alternateRowStyles: { fillColor: [30,41,59] },
+    margin: { left: 10, right: 10 },
+  });
+
+  doc.save(`${tableName}_${new Date().toISOString().slice(0,10)}.pdf`);
+}
+
+// ── Componente ────────────────────────────────────────────────────────────────
 export function RecordsTable({ table, refreshKey, accentColor }: Props) {
   const [records, setRecords] = useState<ScrapRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -16,7 +66,7 @@ export function RecordsTable({ table, refreshKey, accentColor }: Props) {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const data = await listScrap(table, 20);
+      const data = await listScrap(table, 50);
       setRecords(data);
     } catch (e) {
       setError((e as Error).message);
@@ -28,8 +78,8 @@ export function RecordsTable({ table, refreshKey, accentColor }: Props) {
   useEffect(() => { load(); }, [load, refreshKey]);
 
   return (
-    <div className="card mt-6" style={{ borderColor: `${accentColor}40` }}>
-      <div className="flex items-center justify-between mb-4">
+    <div className="card mt-6 border" style={{ borderColor: `${accentColor}40` }}>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-2">
           <Database className="w-4 h-4" style={{ color: accentColor }} />
           <h3 className="text-sm font-semibold text-[var(--text)]">Registros Recientes</h3>
@@ -39,10 +89,31 @@ export function RecordsTable({ table, refreshKey, accentColor }: Props) {
             </span>
           )}
         </div>
-        <button onClick={load} disabled={loading} className="btn-ghost text-xs">
-          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-          Actualizar
-        </button>
+
+        <div className="flex items-center gap-2">
+          {records.length > 0 && (
+            <>
+              <button
+                onClick={() => downloadExcel(records, table)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-[#3fb950]/40 text-[#3fb950] hover:bg-[#3fb950]/10 transition-all"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                Excel
+              </button>
+              <button
+                onClick={() => downloadPDF(records, table, accentColor)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-[#d29922]/40 text-[#d29922] hover:bg-[#d29922]/10 transition-all"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                PDF
+              </button>
+            </>
+          )}
+          <button onClick={load} disabled={loading} className="btn-ghost text-xs">
+            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            Actualizar
+          </button>
+        </div>
       </div>
 
       {error && (
