@@ -40,6 +40,10 @@ function buildHoraValue(date: string, time: string): string {
   return `${date} ${time}`;
 }
 
+// ─── Catálogo de supervisores y autorizadores ───────────────────────────────
+const SUPERVISORES = ["OTTO", "CINTHYA", "MILAGROS", "ALAN", "DENNISE", "VIANETH"];
+const AUTORIZADORES = ["OTTON", "VIANETH"];
+
 // ─── Catálogo de códigos y defectos ─────────────────────────────────────────
 export const REASON_CODES: { code: string; defecto: string }[] = [
   { code: "G1",  defecto: "ROTO (REVENTADO, TROZADO)" },
@@ -402,30 +406,76 @@ export function ScrapForm({ onSubmit, isLoading, tableLabel }: ScrapFormProps) {
           {errors.celda && <ErrorMsg msg={errors.celda.message} />}
         </div>
 
-        {/* 9. Supervisor */}
+        {/* 9. Supervisor — select con nombres */}
         <div>
           <Label htmlFor="supervisor" className={labelClass}>
             Supervisor <span className="text-primary">*</span>
           </Label>
-          <Input
-            id="supervisor"
-            placeholder="Nombre completo"
-            {...register("supervisor")}
-            className={inputClass(!!errors.supervisor)}
+          <Controller
+            name="supervisor"
+            control={control}
+            render={({ field: f }) => (
+              <Select value={f.value} onValueChange={(val) => f.onChange(val)}>
+                <SelectTrigger
+                  id="supervisor"
+                  className={`
+                    h-9 text-sm bg-input border-border text-foreground
+                    focus:border-primary focus:ring-1 focus:ring-primary/30
+                    ${errors.supervisor ? "border-destructive" : ""}
+                  `}
+                >
+                  <SelectValue placeholder="Selecciona supervisor..." />
+                </SelectTrigger>
+                <SelectContent className="bg-popover border-border">
+                  {SUPERVISORES.map((nombre) => (
+                    <SelectItem
+                      key={nombre}
+                      value={nombre}
+                      className="text-sm text-popover-foreground focus:bg-accent focus:text-accent-foreground"
+                    >
+                      {nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           />
           {errors.supervisor && <ErrorMsg msg={errors.supervisor.message} />}
         </div>
 
-        {/* 10. Autorizó */}
+        {/* 10. Autorizó — select con nombres */}
         <div>
           <Label htmlFor="autorizo" className={labelClass}>
             Autorizó <span className="text-primary">*</span>
           </Label>
-          <Input
-            id="autorizo"
-            placeholder="Nombre completo"
-            {...register("autorizo")}
-            className={inputClass(!!errors.autorizo)}
+          <Controller
+            name="autorizo"
+            control={control}
+            render={({ field: f }) => (
+              <Select value={f.value} onValueChange={(val) => f.onChange(val)}>
+                <SelectTrigger
+                  id="autorizo"
+                  className={`
+                    h-9 text-sm bg-input border-border text-foreground
+                    focus:border-primary focus:ring-1 focus:ring-primary/30
+                    ${errors.autorizo ? "border-destructive" : ""}
+                  `}
+                >
+                  <SelectValue placeholder="Selecciona autorizador..." />
+                </SelectTrigger>
+                <SelectContent className="bg-popover border-border">
+                  {AUTORIZADORES.map((nombre) => (
+                    <SelectItem
+                      key={nombre}
+                      value={nombre}
+                      className="text-sm text-popover-foreground focus:bg-accent focus:text-accent-foreground"
+                    >
+                      {nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           />
           {errors.autorizo && <ErrorMsg msg={errors.autorizo.message} />}
         </div>
