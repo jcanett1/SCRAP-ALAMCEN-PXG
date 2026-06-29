@@ -78,6 +78,7 @@ interface Props {
   onSubmit: (data: FormValues) => Promise<void>;
   isLoading: boolean;
   tableLabel: string;
+  accentColor?: string;
 }
 
 const emptyValues = (): FormValues => ({
@@ -88,7 +89,7 @@ const emptyValues = (): FormValues => ({
 });
 
 // ── Componente ────────────────────────────────────────────────────────────────
-export function ScrapForm({ onSubmit, isLoading, tableLabel }: Props) {
+export function ScrapForm({ onSubmit, isLoading, tableLabel, accentColor = "#2f81f7" }: Props) {
   const [time, setTime]         = useState(getTimeAZ());
   const [date, setDate]         = useState(getDateAZ());
   const [pickerOpen, setPicker] = useState(false);
@@ -153,8 +154,8 @@ export function ScrapForm({ onSubmit, isLoading, tableLabel }: Props) {
             />
           </div>
           <div className="flex items-center gap-1.5 mt-1.5 px-1">
-            <Clock className="w-3 h-3 text-[var(--primary)]" />
-            <span className="font-mono text-xs font-semibold text-[var(--primary)]">{time}</span>
+            <Clock className="w-3 h-3" style={{ color: accentColor }} />
+            <span className="font-mono text-xs font-semibold" style={{ color: accentColor }}>{time}</span>
             <span className="text-xs text-[var(--text-muted)]">Hora Pacífico (AZ)</span>
           </div>
           <Controller name="hora" control={control} render={({ field }) => <input type="hidden" {...field} />} />
@@ -330,7 +331,7 @@ export function ScrapForm({ onSubmit, isLoading, tableLabel }: Props) {
           <RotateCcw className="w-4 h-4" />
           Limpiar
         </button>
-        <button type="submit" disabled={isLoading} className="btn-primary">
+        <button type="submit" disabled={isLoading} className="btn-primary" style={{ background: accentColor }}>
           {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           {isLoading ? "Guardando..." : `Guardar en ${tableLabel}`}
         </button>

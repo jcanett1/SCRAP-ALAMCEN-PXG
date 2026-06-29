@@ -5,9 +5,10 @@ import { RefreshCw, Database, Loader2 } from "lucide-react";
 interface Props {
   table: "scrap_pxg_componentes_proceso" | "scrap_pxg_componentes_proveedor";
   refreshKey: number;
+  accentColor: string;
 }
 
-export function RecordsTable({ table, refreshKey }: Props) {
+export function RecordsTable({ table, refreshKey, accentColor }: Props) {
   const [records, setRecords] = useState<ScrapRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
@@ -27,13 +28,13 @@ export function RecordsTable({ table, refreshKey }: Props) {
   useEffect(() => { load(); }, [load, refreshKey]);
 
   return (
-    <div className="card mt-6">
+    <div className="card mt-6" style={{ borderColor: `${accentColor}40` }}>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <Database className="w-4 h-4 text-[var(--primary)]" />
+          <Database className="w-4 h-4" style={{ color: accentColor }} />
           <h3 className="text-sm font-semibold text-[var(--text)]">Registros Recientes</h3>
           {records.length > 0 && (
-            <span className="text-xs px-1.5 py-0.5 rounded-full bg-[var(--primary)]/15 text-[var(--primary)] font-semibold">
+            <span className="text-xs px-1.5 py-0.5 rounded-full font-semibold" style={{ background: `${accentColor}20`, color: accentColor }}>
               {records.length}
             </span>
           )}
@@ -77,9 +78,9 @@ export function RecordsTable({ table, refreshKey }: Props) {
                   <td className="px-3 py-2.5 font-semibold text-[var(--text)] whitespace-nowrap">{r.num_orden}</td>
                   <td className="px-3 py-2.5 text-[var(--text-muted)] whitespace-nowrap">{r.hora}</td>
                   <td className="px-3 py-2.5 font-mono text-[var(--text)]">{r.serial_number}</td>
-                  <td className="px-3 py-2.5 font-mono text-[var(--primary)] whitespace-nowrap">{r.inventory_id}</td>
+                  <td className="px-3 py-2.5 font-mono whitespace-nowrap" style={{ color: accentColor }}>{r.inventory_id}</td>
                   <td className="px-3 py-2.5">
-                    <span className="px-1.5 py-0.5 rounded bg-[var(--primary)]/15 text-[var(--primary)] font-semibold">{r.qty}</span>
+                    <span className="px-1.5 py-0.5 rounded font-semibold" style={{ background: `${accentColor}20`, color: accentColor }}>{r.qty}</span>
                   </td>
                   <td className="px-3 py-2.5 font-mono font-semibold text-[var(--text)]">{r.reason_code}</td>
                   <td className="px-3 py-2.5 text-[var(--text)]">{r.celda}</td>
