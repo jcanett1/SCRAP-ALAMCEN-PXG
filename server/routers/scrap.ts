@@ -22,7 +22,45 @@ const listInputSchema = z.object({
   limit: z.number().int().min(1).max(100).default(20),
 });
 
+const searchInventorySchema = z.object({
+  query: z.string().default(""),
+  limit: z.number().int().min(1).max(50).default(30),
+  offset: z.number().int().min(0).default(0),
+});
+
 export const scrapRouter = router({
+  // Búsqueda de inventory IDs desde el catálogo
+  searchInventory: publicProcedure
+    .input(searchInventorySchema)
+    .query(async ({ input }) => {
+      const { query, limit, offset } = input;
+      const trimmed = query.trim();
+
+      let req = supabase
+        .from("pxg_inventory_catalog")
+        .select("inventory_id, description", { count: "exact" })
+        .order("inventory_id", { ascending: true })
+        .range(offset, offset + limit - 1);
+
+      if (trimmed) {
+        // Buscar por inventory_id (prefijo) O por descripción (ilike)
+        req = req.or(
+          `inventory_id.ilike.${trimmed}%,description.ilike.%${trimmed}%`
+        );
+      }
+
+      const { data, error, count } = await req;
+
+      if (error) {
+        throw new Error(`Error al buscar inventory: ${error.message}`);
+      }
+
+      return {
+        items: (data ?? []) as { inventory_id: string; description: string | null }[],
+        total: count ?? 0,
+      };
+    }),
+
   proceso: router({
     insert: publicProcedure
       .input(scrapSchema)

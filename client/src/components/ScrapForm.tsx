@@ -13,7 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Save, RotateCcw, Calendar, Clock } from "lucide-react";
+import { Loader2, Save, RotateCcw, Calendar, Clock, PackageSearch } from "lucide-react";
+import InventoryPickerDialog from "@/components/InventoryPickerDialog";
 
 // ─── Zona horaria Pacífico/Arizona (UTC-7, sin horario de verano) ────────────
 const AZ_TZ = "America/Phoenix";
@@ -136,6 +137,9 @@ const makeEmptyValues = (): ScrapFormValues => ({
 export function ScrapForm({ onSubmit, isLoading, tableLabel }: ScrapFormProps) {
   const [currentTime, setCurrentTime]   = useState(getCurrentTimeAZ());
   const [selectedDate, setSelectedDate] = useState(getTodayAZ());
+  const [pickerOpen, setPickerOpen]     = useState(false);
+  const [invDesc, setInvDesc]           = useState("");
+  const [invId, setInvId]               = useState("");
 
   // Reloj en tiempo real
   useEffect(() => {
@@ -180,7 +184,15 @@ export function ScrapForm({ onSubmit, isLoading, tableLabel }: ScrapFormProps) {
   const handleClear = () => {
     const today = getTodayAZ();
     setSelectedDate(today);
+    setInvDesc("");
+    setInvId("");
     reset({ ...makeEmptyValues(), hora: buildHoraValue(today, getCurrentTimeAZ()) });
+  };
+
+  const handleInventorySelect = (inventoryId: string, description: string) => {
+    setValue("inventory_id", inventoryId, { shouldValidate: true });
+    setInvId(inventoryId);
+    setInvDesc(description);
   };
 
   const handleFormSubmit = async (data: ScrapFormValues) => {
@@ -300,18 +312,45 @@ export function ScrapForm({ onSubmit, isLoading, tableLabel }: ScrapFormProps) {
           {errors.serial_number && <ErrorMsg msg={errors.serial_number.message} />}
         </div>
 
-        {/* 4. Inventory ID */}
+        {/* 4. Inventory ID — con popup de búsqueda */}
         <div>
-          <Label htmlFor="inventory_id" className={labelClass}>
+          <Label className={labelClass}>
             Inventory ID <span className="text-primary">*</span>
           </Label>
-          <Input
-            id="inventory_id"
-            placeholder="Ej. INV-789"
-            {...register("inventory_id")}
-            className={inputClass(!!errors.inventory_id)}
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            className={`
+              w-full h-9 px-3 rounded-md border text-sm text-left
+              flex items-center justify-between gap-2
+              bg-input transition-all duration-200
+              hover:border-primary/60 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30
+              ${errors.inventory_id ? "border-destructive" : "border-border"}
+            `}
+          >
+            <span className={`truncate ${!invId && !errors.inventory_id ? "text-muted-foreground/50" : "text-foreground"}`}>
+              {invId
+                ? <><span className="font-mono text-primary text-xs mr-2">{invId}</span><span className="text-muted-foreground">{invDesc}</span></>
+                : errors.inventory_id
+                ? <span className="text-destructive text-xs">Selecciona un número de parte</span>
+                : "Buscar número de parte..."}
+            </span>
+            <PackageSearch className="w-4 h-4 text-muted-foreground shrink-0" />
+          </button>
+          {/* Campo oculto para react-hook-form */}
+          <Controller
+            name="inventory_id"
+            control={control}
+            render={({ field: f }) => (
+              <input type="hidden" {...f} />
+            )}
           />
           {errors.inventory_id && <ErrorMsg msg={errors.inventory_id.message} />}
+          <InventoryPickerDialog
+            open={pickerOpen}
+            onClose={() => setPickerOpen(false)}
+            onSelect={handleInventorySelect}
+          />
         </div>
 
         {/* 5. Cantidad */}
