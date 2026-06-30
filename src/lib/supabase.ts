@@ -70,6 +70,23 @@ export async function listScrapByDate(
   return (data ?? []) as ScrapRecord[];
 }
 
+export async function updateScrap(
+  table: "scrap_pxg_componentes_proceso" | "scrap_pxg_componentes_proveedor",
+  id: number,
+  record: Omit<ScrapRecord, "id">
+) {
+  const { error } = await supabase.from(table).update(record).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteScrap(
+  table: "scrap_pxg_componentes_proceso" | "scrap_pxg_componentes_proveedor",
+  id: number
+) {
+  const { error } = await supabase.from(table).delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
 export async function searchInventory(
   query: string,
   limit = 30,
