@@ -178,124 +178,238 @@ function exportExcel(proceso: ScrapRecord[], proveedor: ScrapRecord[], dateFrom:
   XLSX.writeFile(wb, `Scrap_PXG_${dateFrom}_${dateTo}.xlsx`);
 }
 
+// ── Helpers PDF internos ─────────────────────────────────────────────────────
+function pdfHeader(doc: jsPDF, title: string, sub: string, color: [number,number,number]) {
+  const darkBg: [number,number,number] = [13, 17, 23];
+  doc.setFillColor(...darkBg); doc.rect(0, 0, 297, 210, "F");
+  doc.setFillColor(...color);  doc.rect(0, 0, 297, 14, "F");
+  doc.setTextColor(255,255,255); doc.setFontSize(11); doc.setFont("helvetica","bold");
+  doc.text(title, 148.5, 9, { align: "center" });
+  doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(200,210,220);
+  doc.text(sub, 148.5, 13, { align: "center" });
+}
+
+function pdfSectionTitle(doc: jsPDF, text: string, y: number, color: [number,number,number]) {
+  doc.setTextColor(...color); doc.setFontSize(8); doc.setFont("helvetica","bold");
+  doc.text(`▸ ${text}`, 10, y);
+}
+
+/** Dibuja una mini barra horizontal proporcional al máximo */
+function drawBarRow(doc: jsPDF, label: string, value: number, maxVal: number, y: number, color: [number,number,number], barX = 60, barW = 130) {
+  doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(200,210,220);
+  doc.text(label.slice(0,22), 10, y);
+  const filled = maxVal > 0 ? Math.round((value / maxVal) * barW) : 0;
+  doc.setFillColor(40,50,70); doc.roundedRect(barX, y-3.5, barW, 4, 1, 1, "F");
+  if (filled > 0) { doc.setFillColor(...color); doc.roundedRect(barX, y-3.5, filled, 4, 1, 1, "F"); }
+  doc.setTextColor(...color); doc.setFont("helvetica","bold");
+  doc.text(String(value), barX + barW + 3, y);
+}
+
 // ── Exportar PDF ──────────────────────────────────────────────────────────────
 function exportPDF(proceso: ScrapRecord[], proveedor: ScrapRecord[], dateFrom: string, dateTo: string) {
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const all = [...proceso, ...proveedor];
+  const periodo = `Período: ${dateFrom} al ${dateTo}  |  Generado: ${new Date().toLocaleString("es-MX")}`;
 
-  const darkBg  = [15, 23, 42] as [number,number,number];
-  const surface  = [22, 33, 62] as [number,number,number];
-  const altRow   = [30, 41, 59] as [number,number,number];
-  const textCol  = [230, 237, 243] as [number,number,number];
-  const mutedCol = [139, 148, 158] as [number,number,number];
-  const blue     = [47, 129, 247] as [number,number,number];
-  const orange   = [240, 136, 62] as [number,number,number];
-  const green    = [63, 185, 80]  as [number,number,number];
-  const purple   = [163, 113, 247] as [number,number,number];
-  const yellow   = [210, 153, 34] as [number,number,number];
+  const darkBg: [number,number,number]  = [13, 17, 23];
+  const surface: [number,number,number] = [22, 33, 50];
+  const altRow: [number,number,number]  = [28, 40, 58];
+  const textCol: [number,number,number] = [220, 230, 240];
+  const blue:   [number,number,number]  = [47, 129, 247];
+  const orange: [number,number,number]  = [240, 136, 62];
+  const green:  [number,number,number]  = [63, 185, 80];
+  const purple: [number,number,number]  = [163, 113, 247];
+  const yellow: [number,number,number]  = [210, 153, 34];
+  const red:    [number,number,number]  = [248, 81, 73];
 
-  const tableStyle = {
-    theme: "grid" as const,
-    styles: { fontSize: 7, textColor: textCol, fillColor: surface, lineColor: [48,54,61] as [number,number,number] },
-    alternateRowStyles: { fillColor: altRow },
-    margin: { left: 10, right: 10 },
-  };
+  const tbl = (opts: Parameters<typeof autoTable>[1]) =>
+    autoTable(doc, {
+      theme: "grid",
+      styles: { fontSize: 6.5, textColor: textCol, fillColor: surface, lineColor: [40,50,65] as [number,number,number], cellPadding: 1.8 },
+      alternateRowStyles: { fillColor: altRow },
+      margin: { left: 10, right: 10 },
+      ...opts,
+    });
 
-  // ── Portada ──────────────────────────────────────────────────────────────────
+  const lastY = () => (doc as any).lastAutoTable?.finalY ?? 20;
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // PÁGINA 1 — Portada + KPIs + Resumen comparativo
+  // ════════════════════════════════════════════════════════════════════════════
   doc.setFillColor(...darkBg); doc.rect(0, 0, 297, 210, "F");
-  doc.setFillColor(...blue);   doc.rect(0, 0, 297, 22, "F");
-  doc.setTextColor(255,255,255); doc.setFontSize(16); doc.setFont("helvetica","bold");
-  doc.text("PXG SCRAP SYSTEM — REPORTE DE ESTADÍSTICAS", 148.5, 14, { align: "center" });
-  doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(...mutedCol);
-  doc.text(`Período: ${dateFrom}  al  ${dateTo}   |   Generado: ${new Date().toLocaleString("es-MX")}`, 148.5, 19, { align: "center" });
 
-  // KPIs
+  // Banner principal
+  doc.setFillColor(...blue); doc.rect(0, 0, 297, 20, "F");
+  doc.setTextColor(255,255,255); doc.setFontSize(14); doc.setFont("helvetica","bold");
+  doc.text("PXG SCRAP SYSTEM — REPORTE DE ESTADÍSTICAS", 148.5, 12, { align: "center" });
+  doc.setFontSize(7.5); doc.setFont("helvetica","normal"); doc.setTextColor(200,215,235);
+  doc.text(periodo, 148.5, 17.5, { align: "center" });
+
+  // KPIs (4 tarjetas en fila)
+  const qtyP = proceso.reduce((s,r)=>s+(r.qty??0),0);
+  const qtyV = proveedor.reduce((s,r)=>s+(r.qty??0),0);
   const kpis = [
-    { label: "Proceso",   value: proceso.length, qty: proceso.reduce((s,r)=>s+(r.qty??0),0), color: blue },
-    { label: "Proveedor", value: proveedor.length,qty: proveedor.reduce((s,r)=>s+(r.qty??0),0), color: orange },
-    { label: "Total",     value: all.length,      qty: all.reduce((s,r)=>s+(r.qty??0),0), color: green },
-    { label: "Inv. Repetidos", value: repeatedInventory(all).length, qty: null, color: yellow },
+    { label: "SCRAP PROCESO",   val: proceso.length,   sub: `QTY: ${qtyP}`,   color: blue   },
+    { label: "SCRAP PROVEEDOR", val: proveedor.length, sub: `QTY: ${qtyV}`,   color: orange },
+    { label: "TOTAL REGISTROS", val: all.length,       sub: `QTY: ${qtyP+qtyV}`, color: green  },
+    { label: "INV. REPETIDOS",  val: repeatedInventory(all).length, sub: "partes", color: yellow },
   ];
   kpis.forEach((k, i) => {
-    const x = 14 + i * 68;
-    doc.setFillColor(...k.color); doc.roundedRect(x, 28, 62, 22, 2, 2, "F");
-    doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont("helvetica","normal");
-    doc.text(k.label, x+31, 35, { align: "center" });
-    doc.setFontSize(16); doc.setFont("helvetica","bold");
-    doc.text(String(k.value), x+31, 44, { align: "center" });
-    if (k.qty !== null) { doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.text(`QTY: ${k.qty}`, x+31, 49, { align: "center" }); }
+    const x = 10 + i * 70;
+    doc.setFillColor(k.color[0]*0.25+10, k.color[1]*0.25+10, k.color[2]*0.25+10);
+    doc.roundedRect(x, 24, 65, 24, 2, 2, "F");
+    doc.setFillColor(...k.color); doc.roundedRect(x, 24, 65, 5, 2, 2, "F"); doc.rect(x, 27, 65, 2, "F");
+    doc.setTextColor(255,255,255); doc.setFontSize(6.5); doc.setFont("helvetica","bold");
+    doc.text(k.label, x+32.5, 28, { align: "center" });
+    doc.setFontSize(18); doc.text(String(k.val), x+32.5, 40, { align: "center" });
+    doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(...k.color);
+    doc.text(k.sub, x+32.5, 46, { align: "center" });
   });
 
-  // Inventory repetidos
-  doc.setTextColor(...blue); doc.setFontSize(10); doc.setFont("helvetica","bold");
-  doc.text("▸ Inventory IDs Repetidos", 14, 60);
-  autoTable(doc, { ...tableStyle, startY: 63,
-    head: [["Inventory ID","Veces","QTY","Usuarios","Celdas","Códigos"]],
-    headStyles: { fillColor: blue, textColor: [255,255,255], fontStyle: "bold" },
-    body: repeatedInventory(all).slice(0,12).map(x=>[x.inventory_id, x.count, x.qty, x.usuarios, x.celdas, x.codigos]),
+  // Tabla resumen comparativo por código (top 12)
+  pdfSectionTitle(doc, "Comparativo por Código de Razón — Proceso vs Proveedor (QTY)", 57, blue);
+  const allCodes = Array.from(new Set(all.map(r => r.reason_code))).sort();
+  const compRows = allCodes
+    .map(code => ({
+      code,
+      desc: all.find(r=>r.reason_code===code)?.reason ?? "",
+      proc: proceso.filter(r=>r.reason_code===code).reduce((s,r)=>s+(r.qty??0),0),
+      prov: proveedor.filter(r=>r.reason_code===code).reduce((s,r)=>s+(r.qty??0),0),
+    }))
+    .filter(x=>x.proc>0||x.prov>0)
+    .sort((a,b)=>(b.proc+b.prov)-(a.proc+a.prov))
+    .slice(0,15);
+
+  tbl({
+    startY: 60,
+    head: [["Código","Descripción del Defecto","QTY Proceso","QTY Proveedor","Total QTY"]],
+    headStyles: { fillColor: blue, textColor: [255,255,255], fontStyle: "bold", fontSize: 7 },
+    columnStyles: { 0:{cellWidth:16,fontStyle:"bold"}, 1:{cellWidth:80}, 2:{cellWidth:28,halign:"center"}, 3:{cellWidth:28,halign:"center"}, 4:{cellWidth:22,halign:"center",fontStyle:"bold"} },
+    body: compRows.map(x=>[x.code, x.desc, x.proc||"—", x.prov||"—", x.proc+x.prov]),
   });
 
-  // ── Página 2: Por usuario y por celda ────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════════════
+  // PÁGINA 2 — Gráficas de barras (texto) + Top Inventory IDs
+  // ════════════════════════════════════════════════════════════════════════════
   doc.addPage();
-  doc.setFillColor(...darkBg); doc.rect(0, 0, 297, 210, "F");
-  doc.setFillColor(...purple); doc.rect(0, 0, 297, 12, "F");
-  doc.setTextColor(255,255,255); doc.setFontSize(11); doc.setFont("helvetica","bold");
-  doc.text("ANÁLISIS POR USUARIO Y CELDA", 148.5, 8, { align: "center" });
+  pdfHeader(doc, "GRÁFICAS DE ANÁLISIS", periodo, purple);
 
-  doc.setTextColor(...purple); doc.setFontSize(10); doc.setFont("helvetica","bold");
-  doc.text("▸ Scrap por Usuario (Captura)", 14, 20);
-  autoTable(doc, { ...tableStyle, startY: 23,
+  // Gráfica: Top códigos por QTY (barras horizontales)
+  const topCodigos = sumQtyBy(all, "reason_code").slice(0,10);
+  const maxCodQty  = topCodigos[0]?.value ?? 1;
+  pdfSectionTitle(doc, "Top Códigos de Razón por QTY Total", 22, orange);
+  topCodigos.forEach((item, i) => drawBarRow(doc, `${item.name}`, item.value, maxCodQty, 28+i*7, orange));
+
+  // Gráfica: Por supervisor (barras)
+  const topSuperv = countBy(all, "supervisor").slice(0,8);
+  const maxSuperv = topSuperv[0]?.value ?? 1;
+  const yS = 28 + topCodigos.length * 7 + 8;
+  pdfSectionTitle(doc, "Registros por Supervisor", yS, purple);
+  topSuperv.forEach((item, i) => drawBarRow(doc, item.name, item.value, maxSuperv, yS+6+i*7, purple));
+
+  // Gráfica: Por celda
+  const topCelda = countBy(all, "celda").slice(0,8);
+  const maxCelda = topCelda[0]?.value ?? 1;
+  const yC = yS + 6 + topSuperv.length * 7 + 8;
+  pdfSectionTitle(doc, "Registros por Celda", yC, yellow);
+  topCelda.forEach((item, i) => drawBarRow(doc, item.name, item.value, maxCelda, yC+6+i*7, yellow));
+
+  // Gráfica: Top Inventory IDs por QTY
+  const topInv = sumQtyBy(all, "inventory_id").slice(0,8);
+  const maxInv = topInv[0]?.value ?? 1;
+  const yI = yC + 6 + topCelda.length * 7 + 8;
+  if (yI < 195) {
+    pdfSectionTitle(doc, "Top Inventory IDs por QTY", yI, green);
+    topInv.forEach((item, i) => drawBarRow(doc, item.name, item.value, maxInv, yI+6+i*7, green));
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // PÁGINA 3 — Análisis detallado: Inventory repetidos + Por usuario + Por celda
+  // ════════════════════════════════════════════════════════════════════════════
+  doc.addPage();
+  pdfHeader(doc, "ANÁLISIS DETALLADO", periodo, yellow);
+
+  pdfSectionTitle(doc, "Inventory IDs con Repeticiones", 20, yellow);
+  tbl({
+    startY: 23,
+    head: [["Inventory ID","Veces","QTY Total","Usuarios","Celdas","Códigos"]],
+    headStyles: { fillColor: yellow, textColor: [255,255,255], fontStyle: "bold", fontSize: 7 },
+    columnStyles: { 0:{cellWidth:35}, 1:{cellWidth:14,halign:"center"}, 2:{cellWidth:18,halign:"center"}, 3:{cellWidth:45}, 4:{cellWidth:35}, 5:{cellWidth:30} },
+    body: repeatedInventory(all).slice(0,15).map(x=>[x.inventory_id, x.count, x.qty, x.usuarios, x.celdas, x.codigos]),
+  });
+
+  const y3a = lastY() + 6;
+  pdfSectionTitle(doc, "Scrap por Usuario (Captura)", y3a, purple);
+  tbl({
+    startY: y3a + 3,
     head: [["Usuario","Registros","QTY Total","Partes Únicas","Códigos Usados"]],
-    headStyles: { fillColor: purple, textColor: [255,255,255], fontStyle: "bold" },
+    headStyles: { fillColor: purple, textColor: [255,255,255], fontStyle: "bold", fontSize: 7 },
+    columnStyles: { 0:{cellWidth:35}, 1:{cellWidth:20,halign:"center"}, 2:{cellWidth:20,halign:"center"}, 3:{cellWidth:25,halign:"center"}, 4:{cellWidth:80} },
     body: byUsuario(all).map(x=>[x.usuario, x.count, x.qty, x.partes_unicas, x.codigos]),
   });
 
-  const afterUser = (doc as any).lastAutoTable?.finalY ?? 80;
-  doc.setTextColor(...yellow); doc.setFontSize(10); doc.setFont("helvetica","bold");
-  doc.text("▸ Scrap por Celda", 14, afterUser + 10);
-  autoTable(doc, { ...tableStyle, startY: afterUser + 13,
-    head: [["Celda","Registros","QTY Total","Código Más Frecuente"]],
-    headStyles: { fillColor: yellow, textColor: [255,255,255], fontStyle: "bold" },
-    body: byCeldaDetalle(all).map(x=>[x.celda, x.count, x.qty, x.top_codigo]),
-  });
+  const y3b = lastY() + 6;
+  if (y3b < 180) {
+    pdfSectionTitle(doc, "Scrap por Celda", y3b, orange);
+    tbl({
+      startY: y3b + 3,
+      head: [["Celda","Registros","QTY Total","Código Más Frecuente"]],
+      headStyles: { fillColor: orange, textColor: [255,255,255], fontStyle: "bold", fontSize: 7 },
+      columnStyles: { 0:{cellWidth:35}, 1:{cellWidth:20,halign:"center"}, 2:{cellWidth:20,halign:"center"}, 3:{cellWidth:50} },
+      body: byCeldaDetalle(all).map(x=>[x.celda, x.count, x.qty, x.top_codigo]),
+    });
+  }
 
-  // ── Página 3: Códigos con mayor impacto ──────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════════════
+  // PÁGINA 4 — Códigos con mayor impacto
+  // ════════════════════════════════════════════════════════════════════════════
   doc.addPage();
-  doc.setFillColor(...darkBg); doc.rect(0, 0, 297, 210, "F");
-  doc.setFillColor(...orange); doc.rect(0, 0, 297, 12, "F");
-  doc.setTextColor(255,255,255); doc.setFontSize(11); doc.setFont("helvetica","bold");
-  doc.text("CÓDIGOS CON MAYOR IMPACTO", 148.5, 8, { align: "center" });
+  pdfHeader(doc, "CÓDIGOS CON MAYOR IMPACTO", periodo, red);
 
-  doc.setTextColor(...orange); doc.setFontSize(10); doc.setFont("helvetica","bold");
-  doc.text("▸ Ranking de Códigos por QTY Total", 14, 20);
-  autoTable(doc, { ...tableStyle, startY: 23,
-    head: [["#","Código","Descripción del Defecto","QTY Total","Registros","Celdas Afectadas","Usuarios"]],
-    headStyles: { fillColor: orange, textColor: [255,255,255], fontStyle: "bold" },
+  pdfSectionTitle(doc, "Ranking de Defectos por QTY Total", 20, red);
+  tbl({
+    startY: 23,
+    head: [["#","Código","Descripción del Defecto","QTY Total","Registros","Celdas","Usuarios"]],
+    headStyles: { fillColor: red, textColor: [255,255,255], fontStyle: "bold", fontSize: 7 },
+    columnStyles: { 0:{cellWidth:8,halign:"center"}, 1:{cellWidth:16,fontStyle:"bold"}, 2:{cellWidth:80}, 3:{cellWidth:20,halign:"center"}, 4:{cellWidth:20,halign:"center"}, 5:{cellWidth:18,halign:"center"}, 6:{cellWidth:50} },
     body: codigosImpacto(all).map((x,i)=>[i+1, x.codigo, x.descripcion, x.qty, x.count, x.celdas_afectadas, x.usuarios]),
   });
 
-  // ── Páginas de detalle ────────────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════════════
+  // PÁGINA 5 — Detalle Scrap Proceso
+  // ════════════════════════════════════════════════════════════════════════════
   doc.addPage();
-  doc.setFillColor(...darkBg); doc.rect(0, 0, 297, 210, "F");
-  doc.setFillColor(...blue); doc.rect(0, 0, 297, 12, "F");
-  doc.setTextColor(255,255,255); doc.setFontSize(11); doc.setFont("helvetica","bold");
-  doc.text(`SCRAP PROCESO — ${proceso.length} registros`, 148.5, 8, { align: "center" });
-  autoTable(doc, { ...tableStyle, startY: 16,
+  pdfHeader(doc, `DETALLE — SCRAP PROCESO (${proceso.length} registros)`, periodo, blue);
+  tbl({
+    startY: 17,
     head: [["ID","Orden","Fecha/Hora","Serial","Inv. ID","QTY","Código","Defecto","Celda","Supervisor","Captura"]],
-    headStyles: { fillColor: blue, textColor: [255,255,255], fontStyle: "bold" },
+    headStyles: { fillColor: blue, textColor: [255,255,255], fontStyle: "bold", fontSize: 6.5 },
+    columnStyles: { 0:{cellWidth:10,halign:"center"}, 1:{cellWidth:20}, 2:{cellWidth:24}, 3:{cellWidth:22}, 4:{cellWidth:22}, 5:{cellWidth:10,halign:"center"}, 6:{cellWidth:12}, 7:{cellWidth:45}, 8:{cellWidth:14}, 9:{cellWidth:18}, 10:{cellWidth:18} },
     body: proceso.map(r=>[r.id, r.num_orden, r.hora, r.serial_number, r.inventory_id, r.qty, r.reason_code, r.reason, r.celda, r.supervisor, r.captura]),
   });
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // PÁGINA 6 — Detalle Scrap Proveedor
+  // ════════════════════════════════════════════════════════════════════════════
   doc.addPage();
-  doc.setFillColor(...darkBg); doc.rect(0, 0, 297, 210, "F");
-  doc.setFillColor(...orange); doc.rect(0, 0, 297, 12, "F");
-  doc.setTextColor(255,255,255); doc.setFontSize(11); doc.setFont("helvetica","bold");
-  doc.text(`SCRAP PROVEEDOR — ${proveedor.length} registros`, 148.5, 8, { align: "center" });
-  autoTable(doc, { ...tableStyle, startY: 16,
+  pdfHeader(doc, `DETALLE — SCRAP PROVEEDOR (${proveedor.length} registros)`, periodo, orange);
+  tbl({
+    startY: 17,
     head: [["ID","Orden","Fecha/Hora","Serial","Inv. ID","QTY","Código","Defecto","Celda","Supervisor","Captura"]],
-    headStyles: { fillColor: orange, textColor: [255,255,255], fontStyle: "bold" },
+    headStyles: { fillColor: orange, textColor: [255,255,255], fontStyle: "bold", fontSize: 6.5 },
+    columnStyles: { 0:{cellWidth:10,halign:"center"}, 1:{cellWidth:20}, 2:{cellWidth:24}, 3:{cellWidth:22}, 4:{cellWidth:22}, 5:{cellWidth:10,halign:"center"}, 6:{cellWidth:12}, 7:{cellWidth:45}, 8:{cellWidth:14}, 9:{cellWidth:18}, 10:{cellWidth:18} },
     body: proveedor.map(r=>[r.id, r.num_orden, r.hora, r.serial_number, r.inventory_id, r.qty, r.reason_code, r.reason, r.celda, r.supervisor, r.captura]),
   });
+
+  // Pie de página en todas las páginas
+  const totalPages = (doc as any).internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFillColor(10, 14, 20); doc.rect(0, 205, 297, 5, "F");
+    doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.setTextColor(100,115,130);
+    doc.text("PXG SCRAP SYSTEM — Confidencial", 10, 208.5);
+    doc.text(`Página ${i} de ${totalPages}`, 287, 208.5, { align: "right" });
+  }
 
   doc.save(`Scrap_PXG_${dateFrom}_${dateTo}.pdf`);
 }
