@@ -91,26 +91,26 @@ export default function App() {
 
       {/* Header */}
       <header className="border-b border-[var(--border)] bg-[var(--surface)]">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-1.5 rounded-lg" style={{ background: colors.accentLight }}>
-              <Activity className="w-5 h-5" style={{ color: colors.accent }} />
+        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-2 rounded-lg" style={{ background: colors.accentLight }}>
+              <Activity className="w-7 h-7" style={{ color: colors.accent }} />
             </div>
             <div>
-              <h1 className="text-sm font-bold text-[var(--text)] leading-none">PXG Scrap System</h1>
-              <p className="text-xs text-[var(--text-muted)] mt-0.5">Almacén — Captura de Componentes</p>
+              <h1 className="text-xl font-bold text-[var(--text)] leading-none">PXG Scrap System</h1>
+              <p className="text-sm text-[var(--text-muted)] mt-1">Almacén — Captura de Componentes</p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[var(--success)] animate-pulse" />
-            <span className="text-xs text-[var(--text-muted)]">Sistema activo</span>
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full bg-[var(--success)] animate-pulse" />
+            <span className="text-sm text-[var(--text-muted)]">Sistema activo</span>
           </div>
         </div>
       </header>
 
       {/* Tabs */}
       <nav className="border-b border-[var(--border)] bg-[var(--surface)]">
-        <div className="max-w-5xl mx-auto px-4 flex gap-1">
+        <div className="max-w-7xl mx-auto px-6 flex gap-1">
           {TABS.map(tab => {
             const c        = TAB_COLORS[tab.id];
             const isActive = activeTab === tab.id;
@@ -124,7 +124,7 @@ export default function App() {
                   background: c.accentLight,
                 } : {}}
                 className={`
-                  relative flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all duration-200 rounded-t-md
+                  relative flex items-center gap-2 px-7 py-4 text-base font-semibold border-b-2 transition-all duration-200 rounded-t-md
                   ${isActive
                     ? "border-b-2"
                     : "border-transparent text-[var(--text-muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"}
@@ -136,7 +136,7 @@ export default function App() {
                 {tab.label}
                 {isActive && (
                   <span
-                    className="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                    className="ml-1 text-xs font-bold px-2 py-0.5 rounded-full"
                     style={{ background: c.accent, color: "#fff" }}
                   >
                     ACTIVO
@@ -155,7 +155,7 @@ export default function App() {
       />
 
       {/* Contenido */}
-      <main className="max-w-5xl mx-auto px-4 py-6">
+      <main className="max-w-7xl mx-auto px-6 py-8">
 
         {/* Título de sección */}
         <div
