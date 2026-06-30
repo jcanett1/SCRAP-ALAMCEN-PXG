@@ -112,6 +112,50 @@ function byCeldaDetalle(records: ScrapRecord[]) {
     .sort((a, b) => b.qty - a.qty);
 }
 
+/** Detalle completo por celda: cada inventory ID, veces, num_orden, código y fuente */
+function byCeldaDetalleCompleto(
+  proceso: ScrapRecord[],
+  proveedor: ScrapRecord[]
+): Record<string, { inventory_id: string; veces: number; qty: number; ordenes: string; reason_code: string; reason: string; fuente: string }[]> {
+  const tagged = [
+    ...proceso.map(r => ({ ...r, _src: "Proceso" as const })),
+    ...proveedor.map(r => ({ ...r, _src: "Proveedor" as const })),
+  ];
+  const celdaMap: Record<string, typeof tagged> = {};
+  for (const r of tagged) {
+    const c = r.celda ?? "—";
+    if (!celdaMap[c]) celdaMap[c] = [];
+    celdaMap[c].push(r);
+  }
+  const result: Record<string, { inventory_id: string; veces: number; qty: number; ordenes: string; reason_code: string; reason: string; fuente: string }[]> = {};
+  for (const [celda, recs] of Object.entries(celdaMap)) {
+    // agrupar por inventory_id dentro de la celda
+    const invMap: Record<string, { veces: number; qty: number; ordenes: Set<string>; codes: Set<string>; reasons: Set<string>; fuentes: Set<string> }> = {};
+    for (const r of recs) {
+      const id = r.inventory_id ?? "—";
+      if (!invMap[id]) invMap[id] = { veces: 0, qty: 0, ordenes: new Set(), codes: new Set(), reasons: new Set(), fuentes: new Set() };
+      invMap[id].veces++;
+      invMap[id].qty += r.qty ?? 0;
+      if (r.num_orden)   invMap[id].ordenes.add(r.num_orden);
+      if (r.reason_code) invMap[id].codes.add(r.reason_code);
+      if (r.reason)      invMap[id].reasons.add(r.reason);
+      invMap[id].fuentes.add(r._src);
+    }
+    result[celda] = Object.entries(invMap)
+      .map(([inv, v]) => ({
+        inventory_id: inv,
+        veces: v.veces,
+        qty: v.qty,
+        ordenes: Array.from(v.ordenes).join(", ") || "—",
+        reason_code: Array.from(v.codes).join(", ") || "—",
+        reason: Array.from(v.reasons).join(", ") || "—",
+        fuente: Array.from(v.fuentes).join(" / "),
+      }))
+      .sort((a, b) => b.veces - a.veces);
+  }
+  return result;
+}
+
 /** Códigos con mayor impacto: QTY total + descripción + celdas afectadas */
 function codigosImpacto(records: ScrapRecord[]) {
   const map: Record<string, { qty: number; count: number; descripcion: string; celdas: Set<string>; usuarios: Set<string> }> = {};
@@ -513,10 +557,11 @@ export function StatsPage() {
   })).filter(x => x.Proceso > 0 || x.Proveedor > 0).slice(0, 12);
 
   // Datos análisis detallado
-  const invRepetidos   = repeatedInventory(allRecords);
-  const usuarioDetalle = byUsuario(allRecords);
-  const celdaDetalle   = byCeldaDetalle(allRecords);
-  const codigosImp     = codigosImpacto(allRecords);
+  const invRepetidos        = repeatedInventory(allRecords);
+  const usuarioDetalle      = byUsuario(allRecords);
+  const celdaDetalle        = byCeldaDetalle(allRecords);
+  const codigosImp          = codigosImpacto(allRecords);
+  const celdaDetalleCompleto = byCeldaDetalleCompleto(proceso, proveedor);
 
   return (
     <div className="space-y-6">
@@ -753,6 +798,65 @@ export function StatsPage() {
                       <Bar dataKey="value" fill="#ffa657" radius={[4,4,0,0]} />
                     </BarChart>
                   </ResponsiveContainer>
+                </div>
+              )}
+
+              {/* ── Detalle completo por celda ── */}
+              {Object.keys(celdaDetalleCompleto).length > 0 && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-px flex-1 bg-[var(--border)]" />
+                    <span className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest px-2">Detalle de Inventory IDs por Celda</span>
+                    <div className="h-px flex-1 bg-[var(--border)]" />
+                  </div>
+                  {Object.entries(celdaDetalleCompleto)
+                    .sort((a, b) => b[1].reduce((s,x)=>s+x.veces,0) - a[1].reduce((s,x)=>s+x.veces,0))
+                    .map(([celda, items]) => (
+                      <div key={celda} className="card border" style={{ borderColor: "#ffa65740" }}>
+                        <div className="flex items-center gap-2 mb-3">
+                          <MapPin className="w-4 h-4" style={{ color: "#ffa657" }} />
+                          <h3 className="text-sm font-bold text-[var(--text)]">Celda: <span style={{ color: "#ffa657" }}>{celda}</span></h3>
+                          <span className="ml-auto text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: "#ffa65720", color: "#ffa657" }}>
+                            {items.length} {items.length === 1 ? "parte" : "partes"}
+                          </span>
+                        </div>
+                        <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr style={{ background: "#ffa65715" }} className="border-b border-[var(--border)]">
+                                {["Inventory ID","Veces","QTY","Núm. Orden(es)","Código","Defecto","Fuente"].map(h => (
+                                  <th key={h} className="px-3 py-2.5 text-left font-semibold uppercase tracking-wider whitespace-nowrap" style={{ color: "#ffa657" }}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {items.map((row, i) => (
+                                <tr key={i} className={`border-b border-[var(--border)] hover:bg-[var(--surface2)] transition-colors ${i % 2 !== 0 ? "bg-[var(--surface2)]/30" : ""}`}>
+                                  <td className="px-3 py-2.5 font-mono font-semibold" style={{ color: "#ffa657" }}>{row.inventory_id}</td>
+                                  <td className="px-3 py-2.5 text-center">
+                                    <span className="font-bold px-2 py-0.5 rounded-full text-xs" style={{ background: row.veces > 1 ? "#ffa65730" : "#30363d", color: row.veces > 1 ? "#ffa657" : "#8b949e" }}>{row.veces}</span>
+                                  </td>
+                                  <td className="px-3 py-2.5 font-semibold text-center text-[var(--text)]">{row.qty}</td>
+                                  <td className="px-3 py-2.5 text-[var(--text-muted)] font-mono text-xs">{row.ordenes}</td>
+                                  <td className="px-3 py-2.5">
+                                    <span className="font-bold px-1.5 py-0.5 rounded text-xs" style={{ background: "#2f81f720", color: "#2f81f7" }}>{row.reason_code}</span>
+                                  </td>
+                                  <td className="px-3 py-2.5 text-[var(--text-muted)] max-w-[200px] truncate" title={row.reason}>{row.reason}</td>
+                                  <td className="px-3 py-2.5">
+                                    {row.fuente.split(" / ").map(f => (
+                                      <span key={f} className="inline-block mr-1 px-1.5 py-0.5 rounded text-xs font-semibold"
+                                        style={{ background: f === "Proceso" ? "#2f81f720" : "#f0883e20", color: f === "Proceso" ? "#2f81f7" : "#f0883e" }}>
+                                        {f}
+                                      </span>
+                                    ))}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))}
                 </div>
               )}
             </>
