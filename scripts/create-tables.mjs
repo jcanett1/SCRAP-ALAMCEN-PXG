@@ -95,7 +95,7 @@ async function main() {
 
   if (!procesoExists || !proveedorExists) {
     console.log("\nLas tablas deben crearse manualmente en el panel de Supabase.");
-    console.log("Ve a: https://supabase.com/dashboard/project/bdrxcilsuxbkpmolfbgu/editor");
+    console.log("Ve a: https://supabase.com/dashboard/project/hckbtzbcmijdstyazwoz/editor");
     console.log("\nEjecuta el siguiente SQL:\n");
     if (!procesoExists) console.log(SQL_PROCESO);
     if (!proveedorExists) console.log(SQL_PROVEEDOR);
