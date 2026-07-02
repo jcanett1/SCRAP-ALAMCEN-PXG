@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS public.scrap_pxg_componentes_proceso (
   supervisor text NULL,
   autorizo text NULL,
   captura text NULL,
+  revisado boolean NOT NULL DEFAULT false,
   CONSTRAINT scrap_pxg_componentes_proceso_pkey PRIMARY KEY (id)
 );
 `;
@@ -44,8 +45,20 @@ CREATE TABLE IF NOT EXISTS public.scrap_pxg_componentes_proveedor (
   supervisor text NULL,
   autorizo text NULL,
   captura text NULL,
+  revisado boolean NOT NULL DEFAULT false,
   CONSTRAINT scrap_pxg_componentes_proveedor_pkey PRIMARY KEY (id)
 );
+`;
+
+// SQL para agregar la columna revisado a tablas existentes
+const SQL_ALTER_PROCESO = `
+ALTER TABLE public.scrap_pxg_componentes_proceso
+  ADD COLUMN IF NOT EXISTS revisado boolean NOT NULL DEFAULT false;
+`;
+
+const SQL_ALTER_PROVEEDOR = `
+ALTER TABLE public.scrap_pxg_componentes_proveedor
+  ADD COLUMN IF NOT EXISTS revisado boolean NOT NULL DEFAULT false;
 `;
 
 // Intentar via rpc exec_sql si existe
@@ -55,13 +68,19 @@ async function tryRpc(sql, label) {
     console.log(`[${label}] RPC exec_sql falló: ${error.message}`);
     return false;
   }
-  console.log(`[${label}] Creada correctamente via RPC`);
+  console.log(`[${label}] Ejecutado correctamente via RPC`);
   return true;
 }
 
 // Verificar si la tabla ya existe intentando hacer un select
 async function tableExists(tableName) {
   const { error } = await supabase.from(tableName).select("id").limit(1);
+  return !error;
+}
+
+// Verificar si la columna revisado ya existe
+async function columnExists(tableName) {
+  const { data, error } = await supabase.from(tableName).select("revisado").limit(1);
   return !error;
 }
 
@@ -74,16 +93,46 @@ async function main() {
   console.log(`scrap_pxg_componentes_proceso: ${procesoExists ? "✓ EXISTE" : "✗ NO EXISTE"}`);
   console.log(`scrap_pxg_componentes_proveedor: ${proveedorExists ? "✓ EXISTE" : "✗ NO EXISTE"}`);
 
-  if (procesoExists && proveedorExists) {
-    console.log("\n✓ Ambas tablas ya existen. No se requiere acción.");
+  if (!procesoExists || !proveedorExists) {
+    console.log("\nLas tablas deben crearse manualmente en el panel de Supabase.");
+    console.log("Ve a: https://supabase.com/dashboard/project/bdrxcilsuxbkpmolfbgu/editor");
+    console.log("\nEjecuta el siguiente SQL:\n");
+    if (!procesoExists) console.log(SQL_PROCESO);
+    if (!proveedorExists) console.log(SQL_PROVEEDOR);
     return;
   }
 
-  console.log("\nLas tablas deben crearse manualmente en el panel de Supabase.");
-  console.log("Ve a: https://supabase.com/dashboard/project/bdrxcilsuxbkpmolfbgu/editor");
-  console.log("\nEjecuta el siguiente SQL:\n");
-  console.log(SQL_PROCESO);
-  console.log(SQL_PROVEEDOR);
+  // Verificar y agregar columna revisado si no existe
+  console.log("\nVerificando columna 'revisado'...");
+
+  const procesoHasRevisado = await columnExists("scrap_pxg_componentes_proceso");
+  const proveedorHasRevisado = await columnExists("scrap_pxg_componentes_proveedor");
+
+  console.log(`  scrap_pxg_componentes_proceso.revisado: ${procesoHasRevisado ? "✓ EXISTE" : "✗ NO EXISTE"}`);
+  console.log(`  scrap_pxg_componentes_proveedor.revisado: ${proveedorHasRevisado ? "✓ EXISTE" : "✗ NO EXISTE"}`);
+
+  if (procesoHasRevisado && proveedorHasRevisado) {
+    console.log("\n✓ Todas las columnas están al día. No se requiere acción.");
+    return;
+  }
+
+  console.log("\nSe necesita agregar la columna 'revisado'. Intentando via RPC...\n");
+
+  if (!procesoHasRevisado) {
+    const ok = await tryRpc(SQL_ALTER_PROCESO, "ALTER proceso");
+    if (!ok) {
+      console.log("\nEjecuta manualmente en el panel de Supabase:");
+      console.log(SQL_ALTER_PROCESO);
+    }
+  }
+
+  if (!proveedorHasRevisado) {
+    const ok = await tryRpc(SQL_ALTER_PROVEEDOR, "ALTER proveedor");
+    if (!ok) {
+      console.log("\nEjecuta manualmente en el panel de Supabase:");
+      console.log(SQL_ALTER_PROVEEDOR);
+    }
+  }
 }
 
 main().catch(console.error);

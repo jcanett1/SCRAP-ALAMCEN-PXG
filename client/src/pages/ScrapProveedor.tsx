@@ -61,6 +61,7 @@ export default function ScrapProveedor() {
           isLoading={isLoadingRecords}
           onRefresh={() => void refetch()}
           tableLabel={TABLE_NAME}
+          tableType="proveedor"
         />
       </div>
     </div>

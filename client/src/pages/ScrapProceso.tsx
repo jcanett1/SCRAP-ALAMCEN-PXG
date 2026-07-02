@@ -61,6 +61,7 @@ export default function ScrapProceso() {
           isLoading={isLoadingRecords}
           onRefresh={() => void refetch()}
           tableLabel={TABLE_NAME}
+          tableType="proceso"
         />
       </div>
     </div>

@@ -26,6 +26,7 @@ export interface ScrapComponente {
   supervisor: string | null;
   autorizo: string | null;
   captura: string | null;
+  revisado?: boolean | null;
 }
 
 export type ScrapComponenteInsert = Omit<ScrapComponente, "id">;

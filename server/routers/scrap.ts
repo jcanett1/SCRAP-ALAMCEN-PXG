@@ -28,6 +28,20 @@ const searchInventorySchema = z.object({
   offset: z.number().int().min(0).default(0),
 });
 
+// Schema para marcar/desmarcar revisado
+const toggleRevisadoSchema = z.object({
+  id: z.number().int().min(1),
+  revisado: z.boolean(),
+});
+
+// Contraseña de desbloqueo (solo se valida al desmarcar)
+const UNLOCK_PASSWORD = "PXGadmin123";
+
+const unlockSchema = z.object({
+  id: z.number().int().min(1),
+  password: z.string(),
+});
+
 export const scrapRouter = router({
   // Búsqueda de inventory IDs desde el catálogo
   searchInventory: publicProcedure
@@ -93,6 +107,46 @@ export const scrapRouter = router({
 
         return data ?? [];
       }),
+
+    // Marcar como revisado (bloquear)
+    marcarRevisado: publicProcedure
+      .input(toggleRevisadoSchema)
+      .mutation(async ({ input }) => {
+        const { data, error } = await supabase
+          .from("scrap_pxg_componentes_proceso")
+          .update({ revisado: input.revisado })
+          .eq("id", input.id)
+          .select()
+          .single();
+
+        if (error) {
+          throw new Error(`Error al actualizar estado revisado: ${error.message}`);
+        }
+
+        return { success: true, record: data };
+      }),
+
+    // Desbloquear registro (requiere contraseña)
+    desbloquear: publicProcedure
+      .input(unlockSchema)
+      .mutation(async ({ input }) => {
+        if (input.password !== UNLOCK_PASSWORD) {
+          throw new Error("Contraseña incorrecta. No se puede desbloquear el registro.");
+        }
+
+        const { data, error } = await supabase
+          .from("scrap_pxg_componentes_proceso")
+          .update({ revisado: false })
+          .eq("id", input.id)
+          .select()
+          .single();
+
+        if (error) {
+          throw new Error(`Error al desbloquear registro: ${error.message}`);
+        }
+
+        return { success: true, record: data };
+      }),
   }),
 
   proveedor: router({
@@ -126,6 +180,46 @@ export const scrapRouter = router({
         }
 
         return data ?? [];
+      }),
+
+    // Marcar como revisado (bloquear)
+    marcarRevisado: publicProcedure
+      .input(toggleRevisadoSchema)
+      .mutation(async ({ input }) => {
+        const { data, error } = await supabase
+          .from("scrap_pxg_componentes_proveedor")
+          .update({ revisado: input.revisado })
+          .eq("id", input.id)
+          .select()
+          .single();
+
+        if (error) {
+          throw new Error(`Error al actualizar estado revisado: ${error.message}`);
+        }
+
+        return { success: true, record: data };
+      }),
+
+    // Desbloquear registro (requiere contraseña)
+    desbloquear: publicProcedure
+      .input(unlockSchema)
+      .mutation(async ({ input }) => {
+        if (input.password !== UNLOCK_PASSWORD) {
+          throw new Error("Contraseña incorrecta. No se puede desbloquear el registro.");
+        }
+
+        const { data, error } = await supabase
+          .from("scrap_pxg_componentes_proveedor")
+          .update({ revisado: false })
+          .eq("id", input.id)
+          .select()
+          .single();
+
+        if (error) {
+          throw new Error(`Error al desbloquear registro: ${error.message}`);
+        }
+
+        return { success: true, record: data };
       }),
   }),
 });
