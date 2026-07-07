@@ -35,7 +35,7 @@ const toggleRevisadoSchema = z.object({
 });
 
 // Contraseña de desbloqueo (solo se valida al desmarcar)
-const UNLOCK_PASSWORD = "PXGadmin123";
+const UNLOCK_PASSWORD = "PXGMXscrap";
 
 const unlockSchema = z.object({
   id: z.number().int().min(1),
