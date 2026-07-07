@@ -9,7 +9,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 // ── Contraseña de seguridad ───────────────────────────────────────────────────
-const ADMIN_PASSWORD = "Scrappxg";
+const ADMIN_PASSWORD = "PXGMXscrap";
 
 // ── Catálogos ─────────────────────────────────────────────────────────────────
 const SUPERVISORES  = ["OTTO", "CINTHYA", "MILAGROS", "ALAN", "DENNISE", "VIANETH"];
