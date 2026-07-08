@@ -13,7 +13,7 @@ const getTimeAZ = () =>
   new Intl.DateTimeFormat("en-GB", { timeZone: AZ_TZ, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
 
 // ── Catálogos ─────────────────────────────────────────────────────────────────
-const SUPERVISORES  = ["OTTO", "CINTHYA", "MILAGROS", "ALAN", "DENNISE", "VIANETH"];
+const SUPERVISORES  = ["OTTO", "CINTHYA", "MILAGROS", "ALAN", "DENNISE", "LUPITA", "VIANETH"];
 const AUTORIZADORES = ["OTTON", "LUPITA", "VIANETH"];
 
 const REASON_CODES: { code: string; defecto: string }[] = [
