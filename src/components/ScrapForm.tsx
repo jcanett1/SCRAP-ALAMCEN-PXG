@@ -14,7 +14,7 @@ const getTimeAZ = () =>
 
 // ── Catálogos ─────────────────────────────────────────────────────────────────
 const SUPERVISORES  = ["OTTO", "CINTHYA", "MILAGROS", "ALAN", "DENNISE", "VIANETH"];
-const AUTORIZADORES = ["OTTON", "VIANETH"];
+const AUTORIZADORES = ["OTTON", "LUPITA", "VIANETH"];
 
 const REASON_CODES: { code: string; defecto: string }[] = [
   { code: "G1",  defecto: "ROTO (REVENTADO, TROZADO)" },
