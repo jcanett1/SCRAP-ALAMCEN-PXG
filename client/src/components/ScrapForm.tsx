@@ -43,7 +43,7 @@ function buildHoraValue(date: string, time: string): string {
 
 // ─── Catálogo de supervisores y autorizadores ───────────────────────────────
 const SUPERVISORES = ["OTTO", "CINTHYA", "MILAGROS", "ALAN", "DENNISE", "VIANETH"];
-const AUTORIZADORES = ["OTTON", "VIANETH"];
+const AUTORIZADORES = ["OTTON", "VIANETH", "LUPITA"];
 
 // ─── Catálogo de códigos y defectos ─────────────────────────────────────────
 export const REASON_CODES: { code: string; defecto: string }[] = [
