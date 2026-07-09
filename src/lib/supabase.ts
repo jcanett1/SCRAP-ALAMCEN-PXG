@@ -24,6 +24,7 @@ export interface ScrapRecord {
   supervisor: string;
   autorizo: string;
   captura: string;
+  revisado?: boolean | null;
 }
 
 export interface InventoryItem {
@@ -84,6 +85,15 @@ export async function deleteScrap(
   id: number
 ) {
   const { error } = await supabase.from(table).delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function toggleRevisado(
+  table: "scrap_pxg_componentes_proceso" | "scrap_pxg_componentes_proveedor",
+  id: number,
+  revisado: boolean
+) {
+  const { error } = await supabase.from(table).update({ revisado }).eq("id", id);
   if (error) throw new Error(error.message);
 }
 

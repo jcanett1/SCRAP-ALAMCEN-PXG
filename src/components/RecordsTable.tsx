@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { listScrap, updateScrap, deleteScrap, type ScrapRecord } from "@/lib/supabase";
+import { listScrap, updateScrap, deleteScrap, toggleRevisado, type ScrapRecord } from "@/lib/supabase";
 import {
   RefreshCw, Database, Loader2, FileSpreadsheet, FileText,
   Pencil, Trash2, AlertTriangle, Eye, EyeOff, X, Save,
+  CheckCircle2, Lock,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -13,7 +14,7 @@ const ADMIN_PASSWORD = "PXGMXscrap";
 
 // ── Catálogos ─────────────────────────────────────────────────────────────────
 const SUPERVISORES  = ["OTTO", "CINTHYA", "MILAGROS", "ALAN", "DENNISE", "VIANETH"];
-const AUTORIZADORES = ["OTTON", "VIANETH"];
+const AUTORIZADORES = ["OTTON", "VIANETH", "LUPITA"];
 const REASON_CODES: { code: string; defecto: string }[] = [
   { code: "G1",  defecto: "ROTO (REVENTADO, TROZADO)" },
   { code: "G2",  defecto: "FLOJO (HUECO)" },
@@ -64,11 +65,11 @@ interface Props {
 
 // ── Helpers de exportación ────────────────────────────────────────────────────
 function downloadExcel(records: ScrapRecord[], tableName: string) {
-  const headers = ["ID","Orden","Fecha/Hora","Serial","Inventory ID","QTY","Código","Defecto","Descripción","Celda","Supervisor","Autorizó","Captura"];
-  const rows = records.map(r => [r.id, r.num_orden, r.hora, r.serial_number, r.inventory_id, r.qty, r.reason_code, r.reason, r.description, r.celda, r.supervisor, r.autorizo, r.captura]);
+  const headers = ["ID","Orden","Fecha/Hora","Serial","Inventory ID","QTY","Código","Defecto","Descripción","Celda","Supervisor","Autorizó","Captura","Estatus"];
+  const rows = records.map(r => [r.id, r.num_orden, r.hora, r.serial_number, r.inventory_id, r.qty, r.reason_code, r.reason, r.description, r.celda, r.supervisor, r.autorizo, r.captura, r.revisado ? "Revisado" : "Pendiente"]);
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  ws["!cols"] = [6,14,16,14,14,6,8,28,28,10,12,10,12].map(w => ({ wch: w }));
+  ws["!cols"] = [6,14,16,14,14,6,8,28,28,10,12,10,12,10].map(w => ({ wch: w }));
   XLSX.utils.book_append_sheet(wb, ws, tableName.replace("scrap_pxg_componentes_","").toUpperCase());
   XLSX.writeFile(wb, `${tableName}_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
@@ -88,8 +89,8 @@ function downloadPDF(records: ScrapRecord[], tableName: string, accentColor: str
   doc.text(`Generado: ${new Date().toLocaleString("es-MX")} | ${records.length} registros`, 297 - 14, 12, { align: "right" });
   autoTable(doc, {
     startY: 22,
-    head: [["ID","Orden","Fecha/Hora","Serial","Inv. ID","QTY","Código","Defecto","Celda","Supervisor","Autorizó","Captura"]],
-    body: records.map(r => [r.id, r.num_orden, r.hora, r.serial_number, r.inventory_id, r.qty, r.reason_code, r.reason, r.celda, r.supervisor, r.autorizo, r.captura]),
+    head: [["ID","Orden","Fecha/Hora","Serial","Inv. ID","QTY","Código","Defecto","Celda","Supervisor","Autorizó","Captura","Estatus"]],
+    body: records.map(r => [r.id, r.num_orden, r.hora, r.serial_number, r.inventory_id, r.qty, r.reason_code, r.reason, r.celda, r.supervisor, r.autorizo, r.captura, r.revisado ? "Revisado" : "Pendiente"]),
     theme: "grid",
     styles: { fontSize: 7, textColor: [230,237,243], fillColor: [22,33,62], lineColor: [48,54,61] },
     headStyles: { fillColor: rgb as [number,number,number], textColor: [255,255,255], fontStyle: "bold" },
@@ -389,6 +390,7 @@ export function RecordsTable({ table, refreshKey, accentColor }: Props) {
   const [pendingAction, setPendingAction] = useState<{ type: ActionType; record: ScrapRecord } | null>(null);
   const [editRecord,    setEditRecord]    = useState<ScrapRecord | null>(null);
   const [toast,         setToast]         = useState<{ msg: string; ok: boolean } | null>(null);
+  const [togglingId,    setTogglingId]    = useState<number | null>(null);
 
   const showToast = (msg: string, ok: boolean) => {
     setToast({ msg, ok });
@@ -431,6 +433,25 @@ export function RecordsTable({ table, refreshKey, accentColor }: Props) {
     load();
   };
 
+  // Manejar el cambio del checkbox de ESTATUS
+  const handleToggleRevisado = async (record: ScrapRecord) => {
+    if (togglingId === record.id) return;
+    const nuevoEstado = !record.revisado;
+    setTogglingId(record.id!);
+    try {
+      await toggleRevisado(table, record.id!, nuevoEstado);
+      showToast(
+        nuevoEstado ? "Registro marcado como revisado." : "Registro marcado como pendiente.",
+        true
+      );
+      load();
+    } catch (e) {
+      showToast(`Error: ${(e as Error).message}`, false);
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   return (
     <>
       {/* Toast */}
@@ -467,12 +488,19 @@ export function RecordsTable({ table, refreshKey, accentColor }: Props) {
 
       <div className="card mt-6 border" style={{ borderColor: `${accentColor}40` }}>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Database className="w-4 h-4" style={{ color: accentColor }} />
             <h3 className="text-sm font-semibold text-[var(--text)]">Registros Recientes</h3>
             {records.length > 0 && (
               <span className="text-xs px-1.5 py-0.5 rounded-full font-semibold" style={{ background: `${accentColor}20`, color: accentColor }}>
                 {records.length}
+              </span>
+            )}
+            {/* Contador de revisados */}
+            {records.some(r => r.revisado) && (
+              <span className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full font-semibold bg-[#238636]/20 text-[#3fb950]">
+                <CheckCircle2 className="w-3 h-3" />
+                {records.filter(r => r.revisado).length} revisado{records.filter(r => r.revisado).length !== 1 ? "s" : ""}
               </span>
             )}
           </div>
@@ -511,6 +539,10 @@ export function RecordsTable({ table, refreshKey, accentColor }: Props) {
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-[var(--surface2)] border-b border-[var(--border)]">
+                  {/* Columna ESTATUS */}
+                  <th className="px-3 py-2.5 text-center font-semibold text-[var(--text-muted)] uppercase tracking-wider whitespace-nowrap w-24">
+                    ESTATUS
+                  </th>
                   {["ACCIONES","ID","ORDEN","HORA","SERIAL","INV. ID","QTY","CÓDIGO","CELDA","SUPERVISOR","CAPTURA"].map(h => (
                     <th key={h} className="px-3 py-2.5 text-left font-semibold text-[var(--text-muted)] uppercase tracking-wider whitespace-nowrap">
                       {h}
@@ -519,47 +551,120 @@ export function RecordsTable({ table, refreshKey, accentColor }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {records.map((r, i) => (
-                  <tr key={r.id}
-                    className={`border-b border-[var(--border)] transition-colors hover:bg-[var(--surface2)] ${i % 2 === 0 ? "" : "bg-[var(--surface2)]/40"}`}
-                  >
-                    {/* Botones de acción */}
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => setPendingAction({ type: "edit", record: r })}
-                          title="Editar registro"
-                          className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold border transition-all hover:opacity-90 active:scale-95"
-                          style={{ borderColor: `${accentColor}50`, color: accentColor, background: `${accentColor}12` }}
-                        >
-                          <Pencil className="w-3 h-3" /> Editar
-                        </button>
-                        <button
-                          onClick={() => setPendingAction({ type: "delete", record: r })}
-                          title="Eliminar registro"
-                          className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold border transition-all hover:opacity-90 active:scale-95"
-                          style={{ borderColor: "#f8514950", color: "#f85149", background: "#f8514912" }}
-                        >
-                          <Trash2 className="w-3 h-3" /> Eliminar
-                        </button>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 font-mono text-[var(--text-muted)]">#{r.id}</td>
-                    <td className="px-3 py-2.5 font-semibold text-[var(--text)] whitespace-nowrap">{r.num_orden}</td>
-                    <td className="px-3 py-2.5 text-[var(--text-muted)] whitespace-nowrap">{r.hora}</td>
-                    <td className="px-3 py-2.5 font-mono text-[var(--text)]">{r.serial_number}</td>
-                    <td className="px-3 py-2.5 font-mono whitespace-nowrap" style={{ color: accentColor }}>{r.inventory_id}</td>
-                    <td className="px-3 py-2.5">
-                      <span className="px-1.5 py-0.5 rounded font-semibold" style={{ background: `${accentColor}20`, color: accentColor }}>{r.qty}</span>
-                    </td>
-                    <td className="px-3 py-2.5 font-mono font-semibold text-[var(--text)]">{r.reason_code}</td>
-                    <td className="px-3 py-2.5 text-[var(--text)]">{r.celda}</td>
-                    <td className="px-3 py-2.5 text-[var(--text)]">{r.supervisor}</td>
-                    <td className="px-3 py-2.5 text-[var(--text-muted)]">{r.captura}</td>
-                  </tr>
-                ))}
+                {records.map((r, i) => {
+                  const isRevisado = Boolean(r.revisado);
+                  const isToggling = togglingId === r.id;
+
+                  return (
+                    <tr key={r.id}
+                      className={`border-b border-[var(--border)] transition-colors ${
+                        isRevisado
+                          ? "bg-[#238636]/5 hover:bg-[#238636]/10"
+                          : `hover:bg-[var(--surface2)] ${i % 2 === 0 ? "" : "bg-[var(--surface2)]/40"}`
+                      }`}
+                    >
+                      {/* Celda ESTATUS con checkbox */}
+                      <td className="px-3 py-2 text-center whitespace-nowrap">
+                        <div className="flex flex-col items-center justify-center gap-1">
+                          {isToggling ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-[var(--text-muted)]" />
+                          ) : (
+                            <button
+                              onClick={() => handleToggleRevisado(r)}
+                              title={isRevisado ? "Marcar como pendiente" : "Marcar como revisado"}
+                              className={`
+                                w-5 h-5 rounded border-2 flex items-center justify-center transition-all duration-200
+                                ${isRevisado
+                                  ? "bg-[#238636] border-[#238636] hover:bg-[#1a6b2a] hover:border-[#1a6b2a]"
+                                  : "bg-transparent border-[var(--border)] hover:border-[#238636] hover:bg-[#238636]/10"
+                                }
+                              `}
+                            >
+                              {isRevisado && (
+                                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </button>
+                          )}
+                          {/* Badge de estatus */}
+                          {isRevisado ? (
+                            <span className="flex items-center gap-0.5 text-[10px] font-semibold text-[#3fb950] leading-none">
+                              <Lock className="w-2.5 h-2.5" />
+                              Revisado
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-medium text-[var(--text-muted)] leading-none">
+                              Pendiente
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Botones de acción — deshabilitados si está revisado */}
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => !isRevisado && setPendingAction({ type: "edit", record: r })}
+                            title={isRevisado ? "Registro bloqueado — desmarca ESTATUS para editar" : "Editar registro"}
+                            disabled={isRevisado}
+                            className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold border transition-all ${
+                              isRevisado
+                                ? "opacity-30 cursor-not-allowed border-[var(--border)] text-[var(--text-muted)] bg-transparent"
+                                : "hover:opacity-90 active:scale-95"
+                            }`}
+                            style={!isRevisado ? { borderColor: `${accentColor}50`, color: accentColor, background: `${accentColor}12` } : undefined}
+                          >
+                            <Pencil className="w-3 h-3" /> Editar
+                          </button>
+                          <button
+                            onClick={() => !isRevisado && setPendingAction({ type: "delete", record: r })}
+                            title={isRevisado ? "Registro bloqueado — desmarca ESTATUS para eliminar" : "Eliminar registro"}
+                            disabled={isRevisado}
+                            className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold border transition-all ${
+                              isRevisado
+                                ? "opacity-30 cursor-not-allowed border-[var(--border)] text-[var(--text-muted)] bg-transparent"
+                                : "hover:opacity-90 active:scale-95"
+                            }`}
+                            style={!isRevisado ? { borderColor: "#f8514950", color: "#f85149", background: "#f8514912" } : undefined}
+                          >
+                            <Trash2 className="w-3 h-3" /> Eliminar
+                          </button>
+                        </div>
+                      </td>
+
+                      {/* Resto de columnas */}
+                      <td className={`px-3 py-2.5 font-mono text-[var(--text-muted)] ${isRevisado ? "opacity-60" : ""}`}>#{r.id}</td>
+                      <td className={`px-3 py-2.5 font-semibold text-[var(--text)] whitespace-nowrap ${isRevisado ? "opacity-60" : ""}`}>{r.num_orden}</td>
+                      <td className={`px-3 py-2.5 text-[var(--text-muted)] whitespace-nowrap ${isRevisado ? "opacity-60" : ""}`}>{r.hora}</td>
+                      <td className={`px-3 py-2.5 font-mono text-[var(--text)] ${isRevisado ? "opacity-60" : ""}`}>{r.serial_number}</td>
+                      <td className={`px-3 py-2.5 font-mono whitespace-nowrap ${isRevisado ? "opacity-60" : ""}`} style={{ color: isRevisado ? undefined : accentColor }}>{r.inventory_id}</td>
+                      <td className={`px-3 py-2.5 ${isRevisado ? "opacity-60" : ""}`}>
+                        <span className="px-1.5 py-0.5 rounded font-semibold" style={{ background: `${accentColor}20`, color: accentColor }}>{r.qty}</span>
+                      </td>
+                      <td className={`px-3 py-2.5 font-mono font-semibold text-[var(--text)] ${isRevisado ? "opacity-60" : ""}`}>{r.reason_code}</td>
+                      <td className={`px-3 py-2.5 text-[var(--text)] ${isRevisado ? "opacity-60" : ""}`}>{r.celda}</td>
+                      <td className={`px-3 py-2.5 text-[var(--text)] ${isRevisado ? "opacity-60" : ""}`}>{r.supervisor}</td>
+                      <td className={`px-3 py-2.5 text-[var(--text-muted)] ${isRevisado ? "opacity-60" : ""}`}>{r.captura}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Leyenda */}
+        {records.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-4 text-[11px] text-[var(--text-muted)]">
+            <span className="flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3 text-[#3fb950]" />
+              Marcar ESTATUS como revisado bloquea Editar y Eliminar
+            </span>
+            <span className="flex items-center gap-1">
+              <Lock className="w-3 h-3 text-[var(--text-muted)]" />
+              Desmarca el checkbox para volver a habilitar las acciones
+            </span>
           </div>
         )}
       </div>
