@@ -9,8 +9,9 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-// ── Contraseña de seguridad ───────────────────────────────────────────────────
-const ADMIN_PASSWORD = "PXGMXscrap";
+// ── Contraseñas de seguridad ─────────────────────────────────────────────────
+const ADMIN_PASSWORD   = "PXGMXscrap";  // Para editar / eliminar
+const UNLOCK_ESTATUS   = "PXGscrap123"; // Para desmarcar ESTATUS
 
 // ── Catálogos ─────────────────────────────────────────────────────────────────
 const SUPERVISORES  = ["OTTO", "CINTHYA", "MILAGROS", "ALAN", "DENNISE", "VIANETH"];
@@ -98,6 +99,94 @@ function downloadPDF(records: ScrapRecord[], tableName: string, accentColor: str
     margin: { left: 10, right: 10 },
   });
   doc.save(`${tableName}_${new Date().toISOString().slice(0,10)}.pdf`);
+}
+
+// ── Modal para desmarcar ESTATUS ─────────────────────────────────────────────
+interface UnlockEstatusModalProps {
+  recordId: number;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+function UnlockEstatusModal({ recordId, onConfirm, onCancel }: UnlockEstatusModalProps) {
+  const [password, setPassword] = useState("");
+  const [showPwd,  setShowPwd]  = useState(false);
+  const [error,    setError]    = useState("");
+
+  const handleConfirm = () => {
+    if (password !== UNLOCK_ESTATUS) {
+      setError("Contraseña incorrecta. Intenta de nuevo.");
+      setPassword("");
+      return;
+    }
+    onConfirm();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)" }}>
+      <div className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-[var(--border)]" style={{ background: "#d2992215" }}>
+          <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "#d2992225" }}>
+            <Lock className="w-5 h-5" style={{ color: "#d29922" }} />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-[var(--text)]">Desmarcar ESTATUS</p>
+            <p className="text-xs text-[var(--text-muted)]">Registro <span className="font-mono font-semibold">#{recordId}</span> está marcado como revisado.</p>
+          </div>
+          <button onClick={onCancel} className="ml-auto text-[var(--text-muted)] hover:text-[var(--text)] transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 space-y-4">
+          <div className="rounded-lg border px-4 py-3 text-xs text-[var(--text-muted)]" style={{ borderColor: "#d2992230", background: "#d2992208" }}>
+            Para desmarcar este registro como revisado se requiere la contraseña de administrador.
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5 uppercase tracking-wider">
+              Contraseña de administrador
+            </label>
+            <div className="relative">
+              <input
+                type={showPwd ? "text" : "password"}
+                value={password}
+                onChange={e => { setPassword(e.target.value); setError(""); }}
+                onKeyDown={e => e.key === "Enter" && handleConfirm()}
+                placeholder="Ingresa la contraseña..."
+                autoFocus
+                className="w-full bg-[var(--surface2)] border border-[var(--border)] rounded-lg px-3 py-2.5 pr-10 text-sm text-[var(--text)] focus:outline-none transition-colors"
+                style={{ borderColor: error ? "#f85149" : undefined }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPwd(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+              >
+                {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            {error && <p className="text-xs mt-1.5" style={{ color: "#f85149" }}>{error}</p>}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex gap-3 px-6 py-4 border-t border-[var(--border)]">
+          <button onClick={onCancel}
+            className="flex-1 px-4 py-2 rounded-lg text-sm font-semibold border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-muted)] transition-all">
+            Cancelar
+          </button>
+          <button onClick={handleConfirm}
+            className="flex-1 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-[0.98]"
+            style={{ background: "#d29922" }}>
+            Confirmar y desmarcar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ── Modal de confirmación con contraseña ──────────────────────────────────────
@@ -390,7 +479,8 @@ export function RecordsTable({ table, refreshKey, accentColor }: Props) {
   const [pendingAction, setPendingAction] = useState<{ type: ActionType; record: ScrapRecord } | null>(null);
   const [editRecord,    setEditRecord]    = useState<ScrapRecord | null>(null);
   const [toast,         setToast]         = useState<{ msg: string; ok: boolean } | null>(null);
-  const [togglingId,    setTogglingId]    = useState<number | null>(null);
+  const [togglingId,          setTogglingId]          = useState<number | null>(null);
+  const [unlockEstatusRecord, setUnlockEstatusRecord] = useState<ScrapRecord | null>(null);
 
   const showToast = (msg: string, ok: boolean) => {
     setToast({ msg, ok });
@@ -434,14 +524,23 @@ export function RecordsTable({ table, refreshKey, accentColor }: Props) {
   };
 
   // Manejar el cambio del checkbox de ESTATUS
-  const handleToggleRevisado = async (record: ScrapRecord) => {
+  const handleToggleRevisado = (record: ScrapRecord) => {
     if (togglingId === record.id) return;
-    const nuevoEstado = !record.revisado;
+    if (record.revisado) {
+      // Quiere desmarcar → pedir contraseña primero
+      setUnlockEstatusRecord(record);
+    } else {
+      // Quiere marcar → directo sin contraseña
+      void doToggleRevisado(record, true);
+    }
+  };
+
+  const doToggleRevisado = async (record: ScrapRecord, nuevoEstado: boolean) => {
     setTogglingId(record.id!);
     try {
       await toggleRevisado(table, record.id!, nuevoEstado);
       showToast(
-        nuevoEstado ? "Registro marcado como revisado." : "Registro marcado como pendiente.",
+        nuevoEstado ? "Registro marcado como revisado." : "Registro desmarcado correctamente.",
         true
       );
       load();
@@ -472,6 +571,19 @@ export function RecordsTable({ table, refreshKey, accentColor }: Props) {
           accentColor={accentColor}
           onConfirm={handlePasswordConfirmed}
           onCancel={() => setPendingAction(null)}
+        />
+      )}
+
+      {/* Modal para desmarcar ESTATUS */}
+      {unlockEstatusRecord && (
+        <UnlockEstatusModal
+          recordId={unlockEstatusRecord.id!}
+          onConfirm={() => {
+            const rec = unlockEstatusRecord;
+            setUnlockEstatusRecord(null);
+            void doToggleRevisado(rec, false);
+          }}
+          onCancel={() => setUnlockEstatusRecord(null)}
         />
       )}
 
