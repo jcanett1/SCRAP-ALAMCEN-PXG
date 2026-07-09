@@ -66,11 +66,12 @@ interface Props {
 
 // ── Helpers de exportación ────────────────────────────────────────────────────
 function downloadExcel(records: ScrapRecord[], tableName: string) {
-  const headers = ["ID","Orden","Fecha/Hora","Serial","Inventory ID","QTY","Código","Defecto","Descripción","Celda","Supervisor","Autorizó","Captura","Estatus"];
-  const rows = records.map(r => [r.id, r.num_orden, r.hora, r.serial_number, r.inventory_id, r.qty, r.reason_code, r.reason, r.description, r.celda, r.supervisor, r.autorizo, r.captura, r.revisado ? "Revisado" : "Pendiente"]);
+  const filtered = records.filter(r => !r.revisado);
+  const headers = ["ID","Orden","Fecha/Hora","Serial","Inventory ID","QTY","Código","Defecto","Descripción","Celda","Supervisor","Autorizó","Captura"];
+  const rows = filtered.map(r => [r.id, r.num_orden, r.hora, r.serial_number, r.inventory_id, r.qty, r.reason_code, r.reason, r.description, r.celda, r.supervisor, r.autorizo, r.captura]);
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  ws["!cols"] = [6,14,16,14,14,6,8,28,28,10,12,10,12,10].map(w => ({ wch: w }));
+  ws["!cols"] = [6,14,16,14,14,6,8,28,28,10,12,10,12].map(w => ({ wch: w }));
   XLSX.utils.book_append_sheet(wb, ws, tableName.replace("scrap_pxg_componentes_","").toUpperCase());
   XLSX.writeFile(wb, `${tableName}_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
