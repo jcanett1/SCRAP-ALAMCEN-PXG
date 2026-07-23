@@ -55,6 +55,17 @@ export async function listScrap(
   return (data ?? []) as ScrapRecord[];
 }
 
+export async function listAllScrap(
+  table: "scrap_pxg_componentes_proceso" | "scrap_pxg_componentes_proveedor"
+): Promise<ScrapRecord[]> {
+  const { data, error } = await supabase
+    .from(table)
+    .select("*")
+    .order("id", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ScrapRecord[];
+}
+
 export async function listScrapByDate(
   table: "scrap_pxg_componentes_proceso" | "scrap_pxg_componentes_proveedor",
   dateFrom: string,

@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { listScrap, updateScrap, deleteScrap, toggleRevisado, type ScrapRecord } from "@/lib/supabase";
+import { listScrap, listAllScrap, updateScrap, deleteScrap, toggleRevisado, type ScrapRecord } from "@/lib/supabase";
 import {
   RefreshCw, Database, Loader2, FileSpreadsheet, FileText,
   Pencil, Trash2, AlertTriangle, Eye, EyeOff, X, Save,
-  CheckCircle2, Lock,
+  CheckCircle2, Lock, Download,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -65,8 +65,8 @@ interface Props {
 }
 
 // ── Helpers de exportación ────────────────────────────────────────────────────
-function downloadExcel(records: ScrapRecord[], tableName: string) {
-  const filtered = records.filter(r => !r.revisado);
+function downloadExcel(records: ScrapRecord[], tableName: string, includeAll = false) {
+  const filtered = includeAll ? records : records.filter(r => !r.revisado);
   const headers = ["ID","Orden","Fecha/Hora","Serial","Inventory ID","QTY","Código","Defecto","Descripción","Celda","Supervisor","Autorizó","Captura"];
   const rows = filtered.map(r => [r.id, r.num_orden, r.hora, r.serial_number, r.inventory_id, r.qty, r.reason_code, r.reason, r.description, r.celda, r.supervisor, r.autorizo, r.captura]);
   const wb = XLSX.utils.book_new();
@@ -475,6 +475,7 @@ export function RecordsTable({ table, refreshKey, accentColor }: Props) {
   const [records, setRecords] = useState<ScrapRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState<string | null>(null);
+  const [downloadingAll, setDownloadingAll] = useState(false);
 
   // Estados de modales
   const [pendingAction, setPendingAction] = useState<{ type: ActionType; record: ScrapRecord } | null>(null);
@@ -631,6 +632,33 @@ export function RecordsTable({ table, refreshKey, accentColor }: Props) {
                 </button>
               </>
             )}
+            <button
+              onClick={async () => {
+                setDownloadingAll(true);
+                try {
+                  const all = await listAllScrap(table);
+                  if (all.length === 0) {
+                    showToast("No hay registros para descargar.", false);
+                    return;
+                  }
+                  downloadExcel(all, table, true);
+                  showToast(`${all.length} registros descargados correctamente.`, true);
+                } catch (e) {
+                  showToast(`Error al descargar: ${(e as Error).message}`, false);
+                } finally {
+                  setDownloadingAll(false);
+                }
+              }}
+              disabled={downloadingAll}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all"
+              style={{ borderColor: `${accentColor}50`, color: accentColor, background: `${accentColor}10` }}
+              title="Descargar TODOS los registros de la tabla en Excel"
+            >
+              {downloadingAll
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <Download className="w-3.5 h-3.5" />}
+              {downloadingAll ? "Descargando..." : "Descargar Todo"}
+            </button>
             <button onClick={load} disabled={loading} className="btn-ghost text-xs">
               {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
               Actualizar
