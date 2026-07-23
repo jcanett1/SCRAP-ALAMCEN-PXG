@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Loader2, RefreshCw, Database, AlertCircle, Lock, Unlock, CheckCircle2 } from "lucide-react";
+import { Loader2, RefreshCw, Database, AlertCircle, Lock, Unlock, CheckCircle2, Download } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +33,138 @@ interface ScrapRecordsTableProps {
   onRefresh: () => void;
   tableLabel: string;
   tableType: TableType;
+}
+
+// ─── Utilidad CSV ─────────────────────────────────────────────────────────────
+
+function escapeCsvCell(value: string | number | boolean | null | undefined): string {
+  if (value === null || value === undefined) return "";
+  const str = String(value);
+  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+function recordsToCsv(data: ScrapRecord[]): string {
+  const headers = [
+    "ID", "Num Orden", "Hora", "Serial Number", "Inventory ID",
+    "QTY", "Razón", "Código Razón", "Descripción", "Celda",
+    "Supervisor", "Autorizó", "Captura", "Revisado",
+  ];
+
+  const rows = data.map((r) =>
+    [
+      r.id,
+      r.num_orden,
+      r.hora,
+      r.serial_number,
+      r.inventory_id,
+      r.qty,
+      r.reason,
+      r.reason_code,
+      r.description,
+      r.celda,
+      r.supervisor,
+      r.autorizo,
+      r.captura,
+      r.revisado ? "Sí" : "No",
+    ]
+      .map(escapeCsvCell)
+      .join(",")
+  );
+
+  return [headers.join(","), ...rows].join("\n");
+}
+
+function downloadCsv(content: string, filename: string) {
+  const bom = "\uFEFF"; // BOM para compatibilidad con Excel
+  const blob = new Blob([bom + content], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+// ─── Botón de descarga global ─────────────────────────────────────────────────
+
+interface GlobalDownloadButtonProps {
+  tableType: TableType;
+  tableLabel: string;
+}
+
+function GlobalDownloadButton({ tableType, tableLabel }: GlobalDownloadButtonProps) {
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const listAllProceso = trpc.scrap.proceso.listAll.useQuery(undefined, {
+    enabled: false,
+  });
+
+  const listAllProveedor = trpc.scrap.proveedor.listAll.useQuery(undefined, {
+    enabled: false,
+  });
+
+  const handleDownload = async () => {
+    setIsDownloading(true);
+    try {
+      let data: ScrapRecord[] = [];
+
+      if (tableType === "proceso") {
+        const result = await listAllProceso.refetch();
+        data = result.data ?? [];
+      } else {
+        const result = await listAllProveedor.refetch();
+        data = result.data ?? [];
+      }
+
+      if (data.length === 0) {
+        toast.info("Sin registros para descargar", {
+          description: "No hay datos en la tabla para exportar.",
+          duration: 3000,
+        });
+        return;
+      }
+
+      const csv = recordsToCsv(data);
+      const fecha = new Date().toISOString().slice(0, 10);
+      const filename = `${tableLabel}_${fecha}.csv`;
+      downloadCsv(csv, filename);
+
+      toast.success(`Descarga completada`, {
+        description: `${data.length} registros exportados a ${filename}`,
+        duration: 4000,
+      });
+    } catch (err) {
+      toast.error("Error al descargar registros", {
+        description: err instanceof Error ? err.message : "Error desconocido",
+        duration: 6000,
+      });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleDownload}
+      disabled={isDownloading}
+      className="h-7 gap-1.5 text-xs border-emerald-500/40 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10 hover:border-emerald-500/60 transition-colors"
+      title="Descargar todos los registros como CSV"
+    >
+      {isDownloading ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <Download className="h-3.5 w-3.5" />
+      )}
+      {isDownloading ? "Descargando..." : "Descargar Todo"}
+    </Button>
+  );
 }
 
 // ─── Modal de contraseña ──────────────────────────────────────────────────────
@@ -263,16 +395,21 @@ export function ScrapRecordsTable({
             </Badge>
           )}
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onRefresh}
-          disabled={isLoading}
-          className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
-          Actualizar
-        </Button>
+
+        {/* Botones de acción */}
+        <div className="flex items-center gap-2">
+          <GlobalDownloadButton tableType={tableType} tableLabel={tableLabel} />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onRefresh}
+            disabled={isLoading}
+            className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
+            Actualizar
+          </Button>
+        </div>
       </div>
 
       {/* Estado de carga */}

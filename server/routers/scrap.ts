@@ -108,6 +108,21 @@ export const scrapRouter = router({
         return data ?? [];
       }),
 
+    // Obtener todos los registros sin límite (para descarga global)
+    listAll: publicProcedure
+      .query(async () => {
+        const { data, error } = await supabase
+          .from("scrap_pxg_componentes_proceso")
+          .select("*")
+          .order("id", { ascending: false });
+
+        if (error) {
+          throw new Error(`Error al consultar todos los registros de proceso: ${error.message}`);
+        }
+
+        return data ?? [];
+      }),
+
     // Marcar como revisado (bloquear)
     marcarRevisado: publicProcedure
       .input(toggleRevisadoSchema)
@@ -177,6 +192,21 @@ export const scrapRouter = router({
 
         if (error) {
           throw new Error(`Error al consultar registros de proveedor: ${error.message}`);
+        }
+
+        return data ?? [];
+      }),
+
+    // Obtener todos los registros sin límite (para descarga global)
+    listAll: publicProcedure
+      .query(async () => {
+        const { data, error } = await supabase
+          .from("scrap_pxg_componentes_proveedor")
+          .select("*")
+          .order("id", { ascending: false });
+
+        if (error) {
+          throw new Error(`Error al consultar todos los registros de proveedor: ${error.message}`);
         }
 
         return data ?? [];
