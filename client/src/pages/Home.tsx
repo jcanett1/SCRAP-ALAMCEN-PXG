@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Factory, Truck, BarChart3, Package } from "lucide-react";
+import { ThemeSelector } from "@/components/ThemeSelector";
 import ScrapProceso from "./ScrapProceso";
 import ScrapProveedor from "./ScrapProveedor";
 
@@ -32,7 +33,7 @@ const TABS: TabConfig[] = [
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("proceso");
-  const current = TABS.find((t) => t.id === activeTab)!;
+  const current = TABS.find(t => t.id === activeTab)!;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -64,9 +65,9 @@ export default function Home() {
 
       {/* ── Tab Navigation ── */}
       <div className="border-b border-border bg-card/30 backdrop-blur-sm sticky top-14 z-20">
-        <div className="container">
+        <div className="container flex flex-wrap items-end justify-between gap-4 py-3">
           <nav className="flex gap-0 -mb-px" role="tablist">
-            {TABS.map((tab) => {
+            {TABS.map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
               return (
@@ -85,13 +86,18 @@ export default function Home() {
                     }
                   `}
                 >
-                  <Icon className={`h-4 w-4 ${isActive ? "text-primary" : ""}`} />
+                  <Icon
+                    className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
+                  />
                   <span className="hidden sm:inline">{tab.label}</span>
-                  <span className="sm:hidden">{tab.id === "proceso" ? "Proceso" : "Proveedor"}</span>
+                  <span className="sm:hidden">
+                    {tab.id === "proceso" ? "Proceso" : "Proveedor"}
+                  </span>
                 </button>
               );
             })}
           </nav>
+          <ThemeSelector />
         </div>
       </div>
 
