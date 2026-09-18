@@ -12,6 +12,7 @@ import {
   type MaterialRequester,
 } from "./lib/supabase";
 import { BarChart2, Truck, Activity, LineChart, ClipboardList } from "lucide-react";
+import { ThemeSelector } from "./components/ThemeSelector";
 
 type ScrapTable = "scrap_pxg_componentes_proceso" | "scrap_pxg_componentes_proveedor";
 type Tab = "proceso" | "proveedor" | "estadisticas" | "requisicion";
@@ -162,33 +163,36 @@ export default function App() {
 
       {/* Tabs */}
       <nav className="border-b border-[var(--border)] bg-[var(--surface)]">
-        <div className="max-w-7xl mx-auto px-6 flex gap-1 overflow-x-auto">
-          {TABS.map(tab => {
-            const tabColors = TAB_COLORS[tab.id];
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                style={isActive ? {
-                  borderBottomColor: tabColors.accent,
-                  color: tabColors.accent,
-                  background: tabColors.accentLight,
-                } : {}}
-                className={`relative flex shrink-0 items-center gap-2 px-5 py-4 text-sm font-semibold border-b-2 transition-all duration-200 rounded-t-md ${isActive ? "border-b-2" : "border-transparent text-[var(--text-muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"}`}
-              >
-                <span style={{ color: isActive ? tabColors.accent : undefined }}>
-                  {tab.icon(isActive ? tabColors.accent : "#8b949e")}
-                </span>
-                {tab.label}
-                {isActive && (
-                  <span className="ml-1 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: tabColors.accent, color: "#fff" }}>
-                    ACTIVO
+        <div className="max-w-7xl mx-auto px-6 flex flex-wrap items-end justify-between gap-x-5">
+          <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
+            {TABS.map(tab => {
+              const tabColors = TAB_COLORS[tab.id];
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  style={isActive ? {
+                    borderBottomColor: tabColors.accent,
+                    color: tabColors.accent,
+                    background: tabColors.accentLight,
+                  } : {}}
+                  className={`relative flex shrink-0 items-center gap-2 px-5 py-4 text-sm font-semibold border-b-2 transition-all duration-200 rounded-t-md ${isActive ? "border-b-2" : "border-transparent text-[var(--text-muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]"}`}
+                >
+                  <span style={{ color: isActive ? tabColors.accent : undefined }}>
+                    {tab.icon(isActive ? tabColors.accent : "#8b949e")}
                   </span>
-                )}
-              </button>
-            );
-          })}
+                  {tab.label}
+                  {isActive && (
+                    <span className="ml-1 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: tabColors.accent, color: "#fff" }}>
+                      ACTIVO
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <ThemeSelector />
         </div>
       </nav>
 
