@@ -121,4 +121,11 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   { partNumber: "T-TIPWEIGHT-6G", description: "Tip Weight- 6 gram" },
   { partNumber: "T-TIPWEIGHT-7G", description: "Tip Weight- 7 gram" },
   { partNumber: "T-TIPWEIGHT-8G", description: "Tip Weight- 8 gram" },
+  { partNumber: "HC-1417-SW2DR", description: "Secret Weapon Flame Driver Headcover" },
+  { partNumber: "DL-PXG35-13", description: "Secret Weapon LH Mini Driver 2027" },
+  { partNumber: "DR-PXG35-13", description: "Secret Weapon RH Mini Driver 2027" },
+  { partNumber: "PR-PXG7-ONEDONE-BLK", description: "One & Done ZT RH Putter - Black" },
+  { partNumber: "PR-PXG7-TORPEDO-BLK", description: "Torpedo ZT RH Putter - Black" },
+  { partNumber: "PL-PXG7-ONEDONE-BLK", description: "One & Done ZT LH Putter - Black" },
+  { partNumber: "PL-PXG7-TORPEDO-BLK", description: "Torpedo ZT LH Putter - Black" },
 ];
