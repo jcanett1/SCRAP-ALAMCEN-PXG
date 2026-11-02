@@ -7,9 +7,11 @@ import {
   listAllMaterialRequests,
   listMaterialRequestsPage,
   type MaterialRequest,
+  toggleMaterialRequestReviewed,
   updateMaterialRequest,
 } from "../lib/supabase";
 import { MaterialRequestActionDialog, type EditableMaterialRequest } from "./MaterialRequestActionDialog";
+import { Check, Lock } from "lucide-react";
 
 interface Props {
   refreshKey: number;
@@ -38,6 +40,7 @@ function downloadCsv(records: MaterialRequest[]) {
     "Motivo",
     "Quién pide",
     "Entregó",
+    "Estado",
   ];
   const rows = records.map(record => [
     record.id,
@@ -48,6 +51,7 @@ function downloadCsv(records: MaterialRequest[]) {
     record.motivo,
     record.quien_pide,
     record.entrego,
+    record.revisado ? "Revisado" : "Pendiente",
   ]);
   const csv = [headers, ...rows].map(row => row.map(escapeCsv).join(",")).join("\r\n");
   const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
@@ -77,6 +81,7 @@ function recordMatches(record: MaterialRequest, query: string) {
     record.motivo,
     record.quien_pide,
     record.entrego,
+    record.revisado ? "Revisado" : "Pendiente",
   ].join(" ");
   return normalizeSearch(text).includes(query);
 }
@@ -92,6 +97,7 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
   const [error, setError] = useState("");
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSavingAction, setIsSavingAction] = useState(false);
+  const [reviewingId, setReviewingId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchRefreshKey, setSearchRefreshKey] = useState(0);
   const [actionTarget, setActionTarget] = useState<ActionTarget | null>(null);
@@ -192,6 +198,27 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
       setError((caught as Error).message);
     } finally {
       setIsDownloading(false);
+    }
+  };
+
+  const handleToggleReviewed = async (record: MaterialRequest) => {
+    const recordId = record.id;
+    if (recordId == null || reviewingId !== null) return;
+
+    const nextReviewed = !Boolean(record.revisado);
+    setReviewingId(recordId);
+    try {
+      await toggleMaterialRequestReviewed(recordId, nextReviewed);
+      const updateRecord = (items: MaterialRequest[]) => items.map(item =>
+        item.id === recordId ? { ...item, revisado: nextReviewed } : item
+      );
+      setRecords(updateRecord);
+      setAllRecords(current => current ? updateRecord(current) : current);
+      toast.success(nextReviewed ? "Requisición marcada como revisada." : "Requisición marcada como pendiente.");
+    } catch (caught) {
+      toast.error("No se pudo actualizar el estado", { description: (caught as Error).message });
+    } finally {
+      setReviewingId(null);
     }
   };
 
@@ -335,6 +362,7 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
                   <th className="px-3 py-3 text-left">Motivo</th>
                   <th className="px-3 py-3 text-left">Quién pide</th>
                   <th className="px-3 py-3 text-left">Entregó</th>
+                  <th className="px-3 py-3 text-center">Estado</th>
                   <th className="px-3 py-3 text-center">Acciones</th>
                 </tr>
               </thead>
@@ -349,12 +377,32 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
                     <td className="px-3 py-3 max-w-[260px] text-[var(--text)]">{record.motivo}</td>
                     <td className="px-3 py-3 whitespace-nowrap text-[var(--text)]">{record.quien_pide}</td>
                     <td className="px-3 py-3 whitespace-nowrap text-[var(--text)]">{record.entrego}</td>
+                    <td className="px-3 py-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => void handleToggleReviewed(record)}
+                        disabled={reviewingId !== null || isLoading || isSearchingAll || isSavingAction}
+                        aria-pressed={Boolean(record.revisado)}
+                        aria-label={record.revisado ? `Marcar requisición ${record.id} como pendiente` : `Marcar requisición ${record.id} como revisada`}
+                        title={record.revisado ? "Marcar como pendiente" : "Marcar como revisado"}
+                        className="inline-flex flex-col items-center justify-center gap-1 rounded-md px-2 py-1 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <span className={`flex h-7 w-7 items-center justify-center rounded-md border-2 ${record.revisado ? "border-[#238636] bg-[#238636] text-white" : "border-[var(--border)] text-transparent hover:border-[#238636]"}`}>
+                          {reviewingId === record.id ? <Loader2 className="h-4 w-4 animate-spin text-[var(--text-muted)]" /> : record.revisado ? <Check className="h-4 w-4" strokeWidth={3} /> : null}
+                        </span>
+                        <span className={`flex items-center gap-1 text-xs font-semibold ${record.revisado ? "text-[#3fb950]" : "text-[var(--text-muted)]"}`}>
+                          {record.revisado && <Lock className="h-3 w-3" />}
+                          {record.revisado ? "Revisado" : "Pendiente"}
+                        </span>
+                      </button>
+                    </td>
                     <td className="px-3 py-3 whitespace-nowrap">
                       <div className="flex items-center justify-center gap-1.5">
                         <button
                           type="button"
                           onClick={() => setActionTarget({ mode: "edit", record })}
-                          disabled={isSavingAction || isLoading}
+                          disabled={Boolean(record.revisado) || isSavingAction || isLoading}
+                          title={record.revisado ? "Requisición revisada: desmárcala para editar" : "Editar requisición"}
                           className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors hover:bg-[var(--surface2)] disabled:opacity-50"
                           style={{ borderColor: `${accentColor}70`, color: accentColor }}
                           aria-label={`Editar requisición ${record.id}`}
@@ -365,7 +413,8 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
                         <button
                           type="button"
                           onClick={() => setActionTarget({ mode: "delete", record })}
-                          disabled={isSavingAction || isLoading}
+                          disabled={Boolean(record.revisado) || isSavingAction || isLoading}
+                          title={record.revisado ? "Requisición revisada: desmárcala para eliminar" : "Eliminar requisición"}
                           className="inline-flex items-center gap-1 rounded-md border border-[var(--danger)]/40 px-2 py-1 text-xs font-medium text-[var(--danger)] transition-colors hover:bg-[var(--danger)]/10 disabled:opacity-50"
                           aria-label={`Eliminar requisición ${record.id}`}
                         >

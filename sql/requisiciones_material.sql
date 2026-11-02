@@ -21,9 +21,17 @@ create table if not exists public.requisiciones_material (
     )
   ),
   entrego text not null,
+  revisado boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Compatibilidad con la tabla existente: las requisiciones actuales comienzan pendientes.
+alter table public.requisiciones_material
+  add column if not exists revisado boolean not null default false;
+
+comment on column public.requisiciones_material.revisado is
+  'Indica si la requisición ya fue revisada o capturada';
 
 -- Actualiza el catálogo admitido tanto en instalaciones nuevas como existentes.
 alter table public.requisiciones_material
@@ -66,6 +74,9 @@ create policy requisiciones_material_insert
   for insert
   to anon, authenticated
   with check (true);
+
+-- La app escribe por RPC para exigir motivo, auditoría y bloqueo de revisadas.
+revoke update, delete on table public.requisiciones_material from public, anon, authenticated;
 
 -- Auditoría privada: conserva el motivo obligatorio y la instantánea anterior/después.
 create table if not exists public.requisiciones_material_auditoria (
@@ -121,6 +132,10 @@ begin
 
   if not found then
     raise exception 'No se encontró la requisición %.', p_id using errcode = 'P0002';
+  end if;
+
+  if v_antes.revisado then
+    raise exception 'Desmarca la requisición como revisada antes de editarla.' using errcode = '55000';
   end if;
 
   update public.requisiciones_material as r
@@ -179,6 +194,10 @@ begin
     raise exception 'No se encontró la requisición %.', p_id using errcode = 'P0002';
   end if;
 
+  if v_antes.revisado then
+    raise exception 'Desmarca la requisición como revisada antes de eliminarla.' using errcode = '55000';
+  end if;
+
   insert into public.requisiciones_material_auditoria (
     requisicion_id,
     accion,
@@ -203,3 +222,37 @@ revoke all on function public.actualizar_requisicion_material(bigint, date, text
 revoke all on function public.eliminar_requisicion_material(bigint, text) from public;
 grant execute on function public.actualizar_requisicion_material(bigint, date, text, text, integer, text, text, text, text) to anon, authenticated;
 grant execute on function public.eliminar_requisicion_material(bigint, text) to anon, authenticated;
+
+
+create or replace function public.marcar_requisicion_material_revisado(
+  p_id bigint,
+  p_revisado boolean
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $function$
+declare
+  v_despues public.requisiciones_material%rowtype;
+begin
+  if p_revisado is null then
+    raise exception 'Debes indicar si la requisición está revisada.' using errcode = '22023';
+  end if;
+
+  update public.requisiciones_material as r
+     set revisado = p_revisado,
+         updated_at = pg_catalog.now()
+   where r.id = p_id
+  returning r.* into v_despues;
+
+  if not found then
+    raise exception 'No se encontró la requisición %.', p_id using errcode = 'P0002';
+  end if;
+
+  return pg_catalog.to_jsonb(v_despues);
+end;
+$function$;
+
+revoke all on function public.marcar_requisicion_material_revisado(bigint, boolean) from public;
+grant execute on function public.marcar_requisicion_material_revisado(bigint, boolean) to anon, authenticated;

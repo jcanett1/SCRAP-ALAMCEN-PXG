@@ -57,6 +57,7 @@ export interface MaterialRequest {
   motivo: string;
   quien_pide: MaterialRequester;
   entrego: MaterialDeliverer;
+  revisado?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -227,6 +228,14 @@ export async function updateMaterialRequest(
   });
   if (error) throw new Error(error.message);
   return data as MaterialRequest;
+}
+
+export async function toggleMaterialRequestReviewed(id: number, revisado: boolean): Promise<void> {
+  const { error } = await supabase.rpc("marcar_requisicion_material_revisado", {
+    p_id: id,
+    p_revisado: revisado,
+  });
+  if (error) throw new Error(error.message);
 }
 
 export async function deleteMaterialRequest(id: number, changeReason: string): Promise<void> {
