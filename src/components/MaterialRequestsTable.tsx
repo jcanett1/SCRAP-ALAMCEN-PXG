@@ -30,7 +30,7 @@ const escapeCsv = (value: unknown) => {
   return `"${text.split('"').join('""')}"`;
 };
 
-function downloadCsv(records: MaterialRequest[]) {
+function downloadCsv(records: MaterialRequest[], selectedOnly = false) {
   const headers = [
     "ID",
     "Fecha",
@@ -58,7 +58,8 @@ function downloadCsv(records: MaterialRequest[]) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `requisiciones_material_${new Date().toISOString().slice(0, 10)}.csv`;
+  const prefix = selectedOnly ? "requisiciones_material_seleccionadas" : "requisiciones_material";
+  anchor.download = `${prefix}_${new Date().toISOString().slice(0, 10)}.csv`;
   anchor.click();
   URL.revokeObjectURL(url);
 }
@@ -98,10 +99,12 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSavingAction, setIsSavingAction] = useState(false);
   const [reviewingId, setReviewingId] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [searchRefreshKey, setSearchRefreshKey] = useState(0);
   const [actionTarget, setActionTarget] = useState<ActionTarget | null>(null);
   const recordsRequestId = useRef(0);
+  const selectAllVisibleRef = useRef<HTMLInputElement>(null);
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const normalizedQuery = normalizeSearch(debouncedSearchQuery);
 
@@ -177,6 +180,15 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
     () => visibleRecords.reduce((total, record) => total + Number(record.cantidad || 0), 0),
     [visibleRecords]
   );
+  const visibleIds = visibleRecords.flatMap(record => record.id == null ? [] : [record.id]);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id));
+  const someVisibleSelected = visibleIds.some(id => selectedIds.has(id));
+
+  useEffect(() => {
+    if (selectAllVisibleRef.current) {
+      selectAllVisibleRef.current.indeterminate = someVisibleSelected && !allVisibleSelected;
+    }
+  }, [allVisibleSelected, someVisibleSelected]);
 
   useEffect(() => {
     if (pageIndex >= pageCount) setPageIndex(pageCount - 1);
@@ -199,6 +211,49 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
     } finally {
       setIsDownloading(false);
     }
+  };
+
+  const handleDownloadSelected = async () => {
+    if (selectedIds.size === 0) return;
+    setIsDownloading(true);
+    try {
+      const all = await listAllMaterialRequests();
+      setAllRecords(all);
+      const selected = all.filter(record => record.id != null && selectedIds.has(record.id));
+      if (selected.length === 0) {
+        setSelectedIds(new Set());
+        toast.error("No se encontraron requisiciones seleccionadas. Actualiza la tabla y vuelve a seleccionar.");
+        return;
+      }
+      downloadCsv(selected, true);
+      toast.success(`Se descargaron ${selected.length} requisiciones seleccionadas.`);
+    } catch (caught) {
+      setError((caught as Error).message);
+      toast.error("No se pudieron descargar las requisiciones seleccionadas", { description: (caught as Error).message });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleToggleRowSelection = (record: MaterialRequest) => {
+    const recordId = record.id;
+    if (recordId == null) return;
+    setSelectedIds(current => {
+      const next = new Set(current);
+      if (next.has(recordId)) next.delete(recordId);
+      else next.add(recordId);
+      return next;
+    });
+  };
+
+  const handleToggleVisibleSelection = () => {
+    if (visibleIds.length === 0) return;
+    setSelectedIds(current => {
+      const next = new Set(current);
+      if (allVisibleSelected) visibleIds.forEach(id => next.delete(id));
+      else visibleIds.forEach(id => next.add(id));
+      return next;
+    });
   };
 
   const handleToggleReviewed = async (record: MaterialRequest) => {
@@ -238,6 +293,11 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
         });
       } else {
         await deleteMaterialRequest(actionTarget.record.id, changeReason);
+        setSelectedIds(current => {
+          const next = new Set(current);
+          next.delete(actionTarget.record.id!);
+          return next;
+        });
         setActionTarget(null);
         setAllRecords(null);
         setSearchRefreshKey(key => key + 1);
@@ -301,7 +361,7 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
             className="field-input pl-9"
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={handleRefresh}
@@ -312,11 +372,21 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
             <RefreshCw className={`w-4 h-4 ${isLoading || isSearchingAll ? "animate-spin" : ""}`} />
             Actualizar
           </button>
-          <button
-            type="button"
-            onClick={() => void handleDownload()}
-            disabled={isDownloading}
-            className="btn-ghost border border-[var(--border)]"
+              <button
+                type="button"
+                onClick={() => void handleDownloadSelected()}
+                disabled={isDownloading || selectedIds.size === 0}
+                className="btn-ghost border border-[var(--border)] disabled:cursor-not-allowed disabled:opacity-40"
+                title={`Descargar las ${selectedIds.size} requisiciones seleccionadas en CSV`}
+              >
+                {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                CSV seleccionados ({selectedIds.size})
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDownload()}
+                disabled={isDownloading}
+                className="btn-ghost border border-[var(--border)]"
             title="Descargar todas las requisiciones en CSV"
           >
             {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
@@ -351,7 +421,7 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
       ) : (
         <div className="space-y-3">
           <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
-            <table className="w-full text-sm min-w-[1120px]">
+            <table className="w-full text-sm min-w-[1220px]">
               <thead>
                 <tr className="bg-[var(--surface2)] text-[var(--text-muted)] text-[10px] uppercase tracking-wider">
                   <th className="px-3 py-3 text-left">ID</th>
@@ -364,6 +434,21 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
                   <th className="px-3 py-3 text-left">Entregó</th>
                   <th className="px-3 py-3 text-center">Estado</th>
                   <th className="px-3 py-3 text-center">Acciones</th>
+                  <th className="px-3 py-3 text-center">
+                    <label className="inline-flex cursor-pointer flex-col items-center gap-1">
+                      <span>Seleccionar</span>
+                      <input
+                        ref={selectAllVisibleRef}
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        onChange={handleToggleVisibleSelection}
+                        disabled={visibleIds.length === 0 || isDownloading}
+                        aria-label="Seleccionar todas las requisiciones de esta página"
+                        title="Seleccionar todas las requisiciones de esta página"
+                        className="h-4 w-4 rounded accent-[#a371f7]"
+                      />
+                    </label>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -422,6 +507,17 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
                           Eliminar
                         </button>
                       </div>
+                    </td>
+                    <td className="px-3 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={record.id != null && selectedIds.has(record.id)}
+                        onChange={() => handleToggleRowSelection(record)}
+                        disabled={record.id == null || isDownloading}
+                        aria-label={`Seleccionar requisición ${record.id} para descargar`}
+                        title={`Seleccionar requisición ${record.id}`}
+                        className="h-4 w-4 rounded accent-[#a371f7]"
+                      />
                     </td>
                   </tr>
                 ))}
