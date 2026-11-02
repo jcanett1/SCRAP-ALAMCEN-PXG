@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Database, Download, Loader2, Pencil, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useDebounce } from "../hooks/useDebounce";
 import { toast } from "sonner";
 import {
   deleteMaterialRequest,
   listAllMaterialRequests,
-  listMaterialRequests,
+  listMaterialRequestsPage,
   type MaterialRequest,
   updateMaterialRequest,
 } from "../lib/supabase";
@@ -20,6 +20,8 @@ type ActionTarget = {
   mode: "edit" | "delete";
   record: MaterialRequest;
 };
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 const escapeCsv = (value: unknown) => {
   const text = value == null ? "" : String(value);
@@ -81,6 +83,9 @@ function recordMatches(record: MaterialRequest, query: string) {
 
 export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
   const [records, setRecords] = useState<MaterialRequest[]>([]);
+  const [recordCount, setRecordCount] = useState(0);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const [allRecords, setAllRecords] = useState<MaterialRequest[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSearchingAll, setIsSearchingAll] = useState(false);
@@ -90,24 +95,29 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchRefreshKey, setSearchRefreshKey] = useState(0);
   const [actionTarget, setActionTarget] = useState<ActionTarget | null>(null);
+  const recordsRequestId = useRef(0);
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const normalizedQuery = normalizeSearch(debouncedSearchQuery);
 
-  const loadRecords = useCallback(async () => {
+  const loadRecords = useCallback(async (page: number, size: number) => {
+    const requestId = ++recordsRequestId.current;
     setIsLoading(true);
     setError("");
     try {
-      setRecords(await listMaterialRequests(50));
+      const result = await listMaterialRequestsPage(size, page * size);
+      if (requestId !== recordsRequestId.current) return;
+      setRecords(result.records);
+      setRecordCount(result.total);
     } catch (caught) {
-      setError((caught as Error).message);
+      if (requestId === recordsRequestId.current) setError((caught as Error).message);
     } finally {
-      setIsLoading(false);
+      if (requestId === recordsRequestId.current) setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void loadRecords();
-  }, [loadRecords, refreshKey]);
+    void loadRecords(pageIndex, pageSize);
+  }, [loadRecords, pageIndex, pageSize, refreshKey]);
 
   useEffect(() => {
     setAllRecords(null);
@@ -141,23 +151,35 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
   }, [normalizedQuery, allRecords, searchRefreshKey, refreshKey]);
 
   const filteredRecords = useMemo(() => {
-    if (!normalizedQuery) return records;
-    return (allRecords ?? records).filter(record => recordMatches(record, normalizedQuery));
-  }, [records, allRecords, normalizedQuery]);
+    if (!normalizedQuery || allRecords === null) return [];
+    return allRecords.filter(record => recordMatches(record, normalizedQuery));
+  }, [allRecords, normalizedQuery]);
 
-  const totalQuantity = useMemo(
-    () => records.reduce((total, record) => total + Number(record.cantidad || 0), 0),
-    [records]
+  const displayTotal = normalizedQuery
+    ? (allRecords === null ? 0 : filteredRecords.length)
+    : recordCount;
+  const pageCount = Math.max(1, Math.ceil(displayTotal / pageSize));
+  const startIndex = displayTotal === 0 ? 0 : pageIndex * pageSize + 1;
+  const endIndex = Math.min((pageIndex + 1) * pageSize, displayTotal);
+  const visibleRecords = useMemo(
+    () => normalizedQuery
+      ? filteredRecords.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize)
+      : records,
+    [filteredRecords, normalizedQuery, pageIndex, pageSize, records]
   );
-  const filteredQuantity = useMemo(
-    () => filteredRecords.reduce((total, record) => total + Number(record.cantidad || 0), 0),
-    [filteredRecords]
+  const pageQuantity = useMemo(
+    () => visibleRecords.reduce((total, record) => total + Number(record.cantidad || 0), 0),
+    [visibleRecords]
   );
+
+  useEffect(() => {
+    if (pageIndex >= pageCount) setPageIndex(pageCount - 1);
+  }, [pageCount, pageIndex]);
 
   const handleRefresh = () => {
     setAllRecords(null);
     setSearchRefreshKey(key => key + 1);
-    void loadRecords();
+    void loadRecords(pageIndex, pageSize);
   };
 
   const handleDownload = async () => {
@@ -196,7 +218,7 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
           description: "Los datos anteriores y el motivo quedaron guardados en la auditoría.",
         });
       }
-      await loadRecords();
+      await loadRecords(pageIndex, pageSize);
     } catch (caught) {
       toast.error("No se pudo completar la acción", { description: (caught as Error).message });
       throw caught;
@@ -210,10 +232,12 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
     ? isSearchingAll
       ? "Buscando en todas las requisiciones..."
       : allRecords
-        ? `${filteredRecords.length} coincidencias de ${allRecords.length} requisiciones · ${filteredQuantity} piezas`
+        ? `${filteredRecords.length} coincidencias de ${allRecords.length} requisiciones · ${pageQuantity} piezas en esta página`
         : "Preparando búsqueda..."
-    : `Últimas ${records.length} requisiciones · ${totalQuantity} piezas solicitadas`;
+    : `${recordCount} requisiciones registradas · ${pageQuantity} piezas en esta página`;
   const isBusy = isLoading || (searching && isSearchingAll);
+  const isFirstPage = pageIndex === 0;
+  const isLastPage = pageIndex >= pageCount - 1;
 
   return (
     <section className="card border" style={{ borderColor: "rgba(163,113,247,0.5)" }}>
@@ -241,7 +265,10 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
             id="material-requests-search"
             type="search"
             value={searchQuery}
-            onChange={event => setSearchQuery(event.target.value)}
+            onChange={event => {
+              setSearchQuery(event.target.value);
+              setPageIndex(0);
+            }}
             placeholder="Buscar por ID, fecha, material..."
             autoComplete="off"
             className="field-input pl-9"
@@ -295,61 +322,126 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
           <p className="text-xs mt-1">Prueba con un ID, fecha, part number, descripción, motivo, solicitante o quien entregó.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
-          <table className="w-full text-sm min-w-[1120px]">
-            <thead>
-              <tr className="bg-[var(--surface2)] text-[var(--text-muted)] text-[10px] uppercase tracking-wider">
-                <th className="px-3 py-3 text-left">ID</th>
-                <th className="px-3 py-3 text-left">Fecha</th>
-                <th className="px-3 py-3 text-left">Material / Part Number</th>
-                <th className="px-3 py-3 text-left">Descripción</th>
-                <th className="px-3 py-3 text-right">Cantidad</th>
-                <th className="px-3 py-3 text-left">Motivo</th>
-                <th className="px-3 py-3 text-left">Quién pide</th>
-                <th className="px-3 py-3 text-left">Entregó</th>
-                <th className="px-3 py-3 text-center">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRecords.map(record => (
-                <tr key={record.id} className="border-t border-[var(--border)] hover:bg-[var(--surface2)]/60 transition-colors">
-                  <td className="px-3 py-3 font-mono text-[var(--text-muted)]">#{record.id}</td>
-                  <td className="px-3 py-3 whitespace-nowrap text-[var(--text)]">{record.fecha}</td>
-                  <td className="px-3 py-3 font-mono font-semibold whitespace-nowrap" style={{ color: accentColor }}>{record.material_part_number}</td>
-                  <td className="px-3 py-3 text-[var(--text-muted)]">{record.material_description}</td>
-                  <td className="px-3 py-3 text-right font-semibold" style={{ color: accentColor }}>{record.cantidad}</td>
-                  <td className="px-3 py-3 max-w-[260px] text-[var(--text)]">{record.motivo}</td>
-                  <td className="px-3 py-3 whitespace-nowrap text-[var(--text)]">{record.quien_pide}</td>
-                  <td className="px-3 py-3 whitespace-nowrap text-[var(--text)]">{record.entrego}</td>
-                  <td className="px-3 py-3 whitespace-nowrap">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setActionTarget({ mode: "edit", record })}
-                        disabled={isSavingAction || isLoading}
-                        className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors hover:bg-[var(--surface2)] disabled:opacity-50"
-                        style={{ borderColor: `${accentColor}70`, color: accentColor }}
-                        aria-label={`Editar requisición ${record.id}`}
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                        Editar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setActionTarget({ mode: "delete", record })}
-                        disabled={isSavingAction || isLoading}
-                        className="inline-flex items-center gap-1 rounded-md border border-[var(--danger)]/40 px-2 py-1 text-xs font-medium text-[var(--danger)] transition-colors hover:bg-[var(--danger)]/10 disabled:opacity-50"
-                        aria-label={`Eliminar requisición ${record.id}`}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        Eliminar
-                      </button>
-                    </div>
-                  </td>
+        <div className="space-y-3">
+          <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
+            <table className="w-full text-sm min-w-[1120px]">
+              <thead>
+                <tr className="bg-[var(--surface2)] text-[var(--text-muted)] text-[10px] uppercase tracking-wider">
+                  <th className="px-3 py-3 text-left">ID</th>
+                  <th className="px-3 py-3 text-left">Fecha</th>
+                  <th className="px-3 py-3 text-left">Material / Part Number</th>
+                  <th className="px-3 py-3 text-left">Descripción</th>
+                  <th className="px-3 py-3 text-right">Cantidad</th>
+                  <th className="px-3 py-3 text-left">Motivo</th>
+                  <th className="px-3 py-3 text-left">Quién pide</th>
+                  <th className="px-3 py-3 text-left">Entregó</th>
+                  <th className="px-3 py-3 text-center">Acciones</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {visibleRecords.map(record => (
+                  <tr key={record.id} className="border-t border-[var(--border)] hover:bg-[var(--surface2)]/60 transition-colors">
+                    <td className="px-3 py-3 font-mono text-[var(--text-muted)]">#{record.id}</td>
+                    <td className="px-3 py-3 whitespace-nowrap text-[var(--text)]">{record.fecha}</td>
+                    <td className="px-3 py-3 font-mono font-semibold whitespace-nowrap" style={{ color: accentColor }}>{record.material_part_number}</td>
+                    <td className="px-3 py-3 text-[var(--text-muted)]">{record.material_description}</td>
+                    <td className="px-3 py-3 text-right font-semibold" style={{ color: accentColor }}>{record.cantidad}</td>
+                    <td className="px-3 py-3 max-w-[260px] text-[var(--text)]">{record.motivo}</td>
+                    <td className="px-3 py-3 whitespace-nowrap text-[var(--text)]">{record.quien_pide}</td>
+                    <td className="px-3 py-3 whitespace-nowrap text-[var(--text)]">{record.entrego}</td>
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setActionTarget({ mode: "edit", record })}
+                          disabled={isSavingAction || isLoading}
+                          className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors hover:bg-[var(--surface2)] disabled:opacity-50"
+                          style={{ borderColor: `${accentColor}70`, color: accentColor }}
+                          aria-label={`Editar requisición ${record.id}`}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActionTarget({ mode: "delete", record })}
+                          disabled={isSavingAction || isLoading}
+                          className="inline-flex items-center gap-1 rounded-md border border-[var(--danger)]/40 px-2 py-1 text-xs font-medium text-[var(--danger)] transition-colors hover:bg-[var(--danger)]/10 disabled:opacity-50"
+                          aria-label={`Eliminar requisición ${record.id}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Eliminar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
+              <span>
+                Mostrando {startIndex}–{endIndex} de {displayTotal} requisiciones
+              </span>
+              <label htmlFor="material-requests-page-size" className="ml-1">Filas por página</label>
+              <select
+                id="material-requests-page-size"
+                value={pageSize}
+                onChange={event => {
+                  setPageSize(Number(event.target.value));
+                  setPageIndex(0);
+                }}
+                className="field-input !w-auto !py-1.5 !px-2 text-xs"
+                aria-label="Filas por página"
+              >
+                {PAGE_SIZE_OPTIONS.map(size => <option key={size} value={size}>{size}</option>)}
+              </select>
+            </div>
+
+            <nav className="flex flex-wrap items-center justify-start gap-1 sm:justify-end" aria-label="Paginación de requisiciones">
+              <button
+                type="button"
+                onClick={() => setPageIndex(0)}
+                disabled={isFirstPage || isLoading}
+                className="btn-ghost border border-[var(--border)] px-2 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Ir a la primera página"
+              >
+                Primera
+              </button>
+              <button
+                type="button"
+                onClick={() => setPageIndex(page => Math.max(0, page - 1))}
+                disabled={isFirstPage || isLoading}
+                className="btn-ghost border border-[var(--border)] px-2 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Página anterior"
+              >
+                Anterior
+              </button>
+              <span className="px-2 text-xs text-[var(--text-muted)]" aria-live="polite">
+                Página {pageIndex + 1} de {pageCount}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPageIndex(page => Math.min(pageCount - 1, page + 1))}
+                disabled={isLastPage || isLoading}
+                className="btn-ghost border border-[var(--border)] px-2 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Página siguiente"
+              >
+                Siguiente
+              </button>
+              <button
+                type="button"
+                onClick={() => setPageIndex(pageCount - 1)}
+                disabled={isLastPage || isLoading}
+                className="btn-ghost border border-[var(--border)] px-2 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Ir a la última página"
+              >
+                Última
+              </button>
+            </nav>
+          </div>
         </div>
       )}
     </section>

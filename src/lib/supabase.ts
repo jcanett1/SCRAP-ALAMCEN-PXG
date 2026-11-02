@@ -193,6 +193,19 @@ export async function listAllMaterialRequests(): Promise<MaterialRequest[]> {
   return (data ?? []) as MaterialRequest[];
 }
 
+export async function listMaterialRequestsPage(
+  limit = 10,
+  offset = 0
+): Promise<{ records: MaterialRequest[]; total: number }> {
+  const { data, error, count } = await supabase
+    .from("requisiciones_material")
+    .select("*", { count: "exact" })
+    .order("id", { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (error) throw new Error(error.message);
+  return { records: (data ?? []) as MaterialRequest[], total: count ?? 0 };
+}
+
 export async function updateMaterialRequest(
   id: number,
   record: EditableMaterialRequest,
