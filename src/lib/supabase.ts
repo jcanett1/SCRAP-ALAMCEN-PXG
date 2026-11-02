@@ -41,7 +41,12 @@ export type MaterialRequester =
   | "TECNICOS"
   | "INGENIERIA";
 
-export type MaterialDeliverer = "DENISSE SANZARRIC" | "YODELI LOPEZ";
+export type MaterialDeliverer =
+  | "DENISSE SANZARRIC"
+  | "YODELI LOPEZ"
+  | "DIANA MENDEZ"
+  | "YAJAIRA ONTIVEROS"
+  | "MAREDNA PUIG";
 
 export interface MaterialRequest {
   id?: number;
@@ -55,6 +60,8 @@ export interface MaterialRequest {
   created_at?: string;
   updated_at?: string;
 }
+
+export type EditableMaterialRequest = Omit<MaterialRequest, "id" | "created_at" | "updated_at">;
 
 // ── Helpers de acceso a datos ─────────────────────────────────────────────────
 export async function insertScrap(
@@ -184,4 +191,38 @@ export async function listAllMaterialRequests(): Promise<MaterialRequest[]> {
     .order("id", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as MaterialRequest[];
+}
+
+export async function updateMaterialRequest(
+  id: number,
+  record: EditableMaterialRequest,
+  changeReason: string
+): Promise<MaterialRequest> {
+  const trimmedReason = changeReason.trim();
+  if (!trimmedReason) throw new Error("Debes indicar el motivo de la edición.");
+
+  const { data, error } = await supabase.rpc("actualizar_requisicion_material", {
+    p_id: id,
+    p_fecha: record.fecha,
+    p_material_part_number: record.material_part_number,
+    p_material_description: record.material_description,
+    p_cantidad: record.cantidad,
+    p_motivo: record.motivo,
+    p_quien_pide: record.quien_pide,
+    p_entrego: record.entrego,
+    p_motivo_cambio: trimmedReason,
+  });
+  if (error) throw new Error(error.message);
+  return data as MaterialRequest;
+}
+
+export async function deleteMaterialRequest(id: number, changeReason: string): Promise<void> {
+  const trimmedReason = changeReason.trim();
+  if (!trimmedReason) throw new Error("Debes indicar el motivo de la eliminación.");
+
+  const { error } = await supabase.rpc("eliminar_requisicion_material", {
+    p_id: id,
+    p_motivo_cambio: trimmedReason,
+  });
+  if (error) throw new Error(error.message);
 }

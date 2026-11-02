@@ -25,7 +25,13 @@ export const REQUESTERS: MaterialRequester[] = [
   "INGENIERIA",
 ];
 
-export const DELIVERERS: MaterialDeliverer[] = ["DENISSE SANZARRIC", "YODELI LOPEZ"];
+export const DELIVERERS: MaterialDeliverer[] = [
+  "DENISSE SANZARRIC",
+  "YODELI LOPEZ",
+  "DIANA MENDEZ",
+  "YAJAIRA ONTIVEROS",
+  "MAREDNA PUIG",
+];
 
 const schema = z.object({
   fecha: z.string().min(1, "La fecha es requerida"),
