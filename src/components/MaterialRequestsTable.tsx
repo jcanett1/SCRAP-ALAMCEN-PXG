@@ -11,6 +11,7 @@ import {
   updateMaterialRequest,
 } from "../lib/supabase";
 import { MaterialRequestActionDialog, type EditableMaterialRequest } from "./MaterialRequestActionDialog";
+import { MaterialRequestReviewPasswordDialog } from "./MaterialRequestReviewPasswordDialog";
 import { Check, Lock } from "lucide-react";
 
 interface Props {
@@ -21,6 +22,11 @@ interface Props {
 type ActionTarget = {
   mode: "edit" | "delete";
   record: MaterialRequest;
+};
+
+type ReviewTarget = {
+  record: MaterialRequest;
+  nextReviewed: boolean;
 };
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
@@ -103,6 +109,7 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchRefreshKey, setSearchRefreshKey] = useState(0);
   const [actionTarget, setActionTarget] = useState<ActionTarget | null>(null);
+  const [reviewTarget, setReviewTarget] = useState<ReviewTarget | null>(null);
   const recordsRequestId = useRef(0);
   const selectAllVisibleRef = useRef<HTMLInputElement>(null);
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
@@ -256,22 +263,31 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
     });
   };
 
-  const handleToggleReviewed = async (record: MaterialRequest) => {
+  const handleToggleReviewed = (record: MaterialRequest) => {
     const recordId = record.id;
     if (recordId == null || reviewingId !== null) return;
 
-    const nextReviewed = !Boolean(record.revisado);
+    setReviewTarget({ record, nextReviewed: !Boolean(record.revisado) });
+  };
+
+  const handleReviewPasswordConfirm = async (password: string) => {
+    const target = reviewTarget;
+    if (!target || target.record.id == null) throw new Error("No se encontró el identificador de la requisición.");
+
+    const recordId = target.record.id;
+    const nextReviewed = target.nextReviewed;
     setReviewingId(recordId);
     try {
-      await toggleMaterialRequestReviewed(recordId, nextReviewed);
+      await toggleMaterialRequestReviewed(recordId, nextReviewed, password);
       const updateRecord = (items: MaterialRequest[]) => items.map(item =>
         item.id === recordId ? { ...item, revisado: nextReviewed } : item
       );
       setRecords(updateRecord);
       setAllRecords(current => current ? updateRecord(current) : current);
+      setReviewTarget(null);
       toast.success(nextReviewed ? "Requisición marcada como revisada." : "Requisición marcada como pendiente.");
     } catch (caught) {
-      toast.error("No se pudo actualizar el estado", { description: (caught as Error).message });
+      throw caught instanceof Error ? caught : new Error("No se pudo actualizar el estado de revisión.");
     } finally {
       setReviewingId(null);
     }
@@ -336,6 +352,16 @@ export function MaterialRequestsTable({ refreshKey, accentColor }: Props) {
           accentColor={accentColor}
           onCancel={() => setActionTarget(null)}
           onConfirm={handleActionConfirm}
+        />
+      )}
+      {reviewTarget?.record.id != null && (
+        <MaterialRequestReviewPasswordDialog
+          recordId={reviewTarget.record.id}
+          nextReviewed={reviewTarget.nextReviewed}
+          accentColor={accentColor}
+          isSubmitting={reviewingId === reviewTarget.record.id}
+          onCancel={() => setReviewTarget(null)}
+          onConfirm={handleReviewPasswordConfirm}
         />
       )}
 

@@ -230,10 +230,13 @@ export async function updateMaterialRequest(
   return data as MaterialRequest;
 }
 
-export async function toggleMaterialRequestReviewed(id: number, revisado: boolean): Promise<void> {
+export async function toggleMaterialRequestReviewed(id: number, revisado: boolean, password: string): Promise<void> {
+  if (!password) throw new Error("Debes introducir la contraseña para cambiar el estado.");
+
   const { error } = await supabase.rpc("marcar_requisicion_material_revisado", {
     p_id: id,
     p_revisado: revisado,
+    p_password: password,
   });
   if (error) throw new Error(error.message);
 }
