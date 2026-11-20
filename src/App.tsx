@@ -5,13 +5,14 @@ import { RecordsTable } from "./components/RecordsTable";
 import { StatsPage } from "./components/StatsPage";
 import { MaterialRequestForm, type MaterialRequestFormValues } from "./components/MaterialRequestForm";
 import { MaterialRequestsTable } from "./components/MaterialRequestsTable";
+import InventoryCatalogDialog from "./components/InventoryCatalogDialog";
 import {
   insertMaterialRequest,
   insertScrap,
   type MaterialDeliverer,
   type MaterialRequester,
 } from "./lib/supabase";
-import { BarChart2, Truck, Activity, LineChart, ClipboardList } from "lucide-react";
+import { BarChart2, Truck, Activity, LineChart, ClipboardList, Plus } from "lucide-react";
 import { ThemeSelector } from "./components/ThemeSelector";
 
 type ScrapTable = "scrap_pxg_componentes_proceso" | "scrap_pxg_componentes_proveedor";
@@ -78,6 +79,7 @@ const TABS: {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("proceso");
+  const [inventoryDialogOpen, setInventoryDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -155,8 +157,20 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-[var(--success)] animate-pulse" />
-            <span className="text-sm text-[var(--text-muted)]">Sistema activo</span>
+            <div className="hidden sm:flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-[var(--success)] animate-pulse" />
+              <span className="text-sm text-[var(--text-muted)]">Sistema activo</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setInventoryDialogOpen(true)}
+              aria-label="Nuevo número de parte"
+              className="btn-primary"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Nuevo número de parte</span>
+              <span className="sm:hidden">Nuevo</span>
+            </button>
           </div>
         </div>
       </header>
@@ -259,6 +273,11 @@ export default function App() {
           </>
         )}
       </main>
+
+      <InventoryCatalogDialog
+        open={inventoryDialogOpen}
+        onClose={() => setInventoryDialogOpen(false)}
+      />
 
       <footer className="text-center py-6 text-xs text-[var(--text-muted)] border-t border-[var(--border)] mt-8">
         PXG Scrap System — Almacén © {new Date().getFullYear()}

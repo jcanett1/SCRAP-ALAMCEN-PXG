@@ -32,6 +32,13 @@ export interface InventoryItem {
   description: string | null;
 }
 
+export interface MaterialCatalogItem {
+  partNumber: string;
+  description: string;
+}
+
+export const INVENTORY_CATALOG_UPDATED_EVENT = "pxg-inventory-catalog-updated";
+
 export type MaterialRequester =
   | "CELDA 11"
   | "CELDA 10"
@@ -153,14 +160,51 @@ export async function searchInventory(
     .range(offset, offset + limit - 1);
 
   if (trimmed) {
+    const escapedQuery = trimmed.replace(/[\\%_]/g, "\\$&");
+    const quoteValue = (value: string) =>
+      `"${value.replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`;
     req = req.or(
-      `inventory_id.ilike.${trimmed}%,description.ilike.%${trimmed}%`
+      `inventory_id.ilike.${quoteValue(`${escapedQuery}%`)},description.ilike.${quoteValue(`%${escapedQuery}%`)}`
     );
   }
 
   const { data, error, count } = await req;
   if (error) throw new Error(error.message);
   return { items: (data ?? []) as InventoryItem[], total: count ?? 0 };
+}
+
+export async function insertInventoryCatalogItem(input: {
+  inventory_id: string;
+  description: string;
+}): Promise<InventoryItem> {
+  const inventoryId = input.inventory_id.trim();
+  const description = input.description.trim();
+
+  if (!inventoryId || !description) {
+    throw new Error("Inventory ID y descripción son obligatorios.");
+  }
+  if (inventoryId.length > 160 || description.length > 500) {
+    throw new Error("El Inventory ID admite hasta 160 caracteres y la descripción hasta 500.");
+  }
+
+  const { data, error } = await supabase
+    .from("pxg_inventory_catalog")
+    .insert({ inventory_id: inventoryId, description })
+    .select("inventory_id, description")
+    .single();
+
+  if (error) {
+    if (error.code === "23505") {
+      throw new Error(`El Inventory ID “${inventoryId}” ya existe en el catálogo.`);
+    }
+    throw new Error(error.message);
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(INVENTORY_CATALOG_UPDATED_EVENT));
+  }
+
+  return data as InventoryItem;
 }
 
 export async function insertMaterialRequest(

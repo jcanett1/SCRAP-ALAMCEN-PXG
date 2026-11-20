@@ -4,8 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Calendar, Loader2, PackageSearch, RotateCcw, Save } from "lucide-react";
 import MaterialPickerDialog from "./MaterialPickerDialog";
-import type { MaterialCatalogItem } from "../data/materials";
-import type { MaterialDeliverer, MaterialRequester } from "../lib/supabase";
+import type { MaterialCatalogItem, MaterialDeliverer, MaterialRequester } from "../lib/supabase";
 
 const getDateAZ = () =>
   new Intl.DateTimeFormat("en-CA", {

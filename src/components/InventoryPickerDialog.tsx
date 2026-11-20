@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { searchInventory, type InventoryItem } from "@/lib/supabase";
+import {
+  INVENTORY_CATALOG_UPDATED_EVENT,
+  searchInventory,
+  type InventoryItem,
+} from "@/lib/supabase";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Search, PackageSearch, Loader2, CheckCircle2, X } from "lucide-react";
 
@@ -18,6 +22,8 @@ export default function InventoryPickerDialog({ open, onClose, onSelect }: Props
   const [items, setItems]       = useState<InventoryItem[]>([]);
   const [total, setTotal]       = useState(0);
   const [loading, setLoading]   = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [catalogVersion, setCatalogVersion] = useState(0);
   const inputRef                = useRef<HTMLInputElement>(null);
   const debouncedQuery          = useDebounce(query, 300);
 
@@ -31,13 +37,31 @@ export default function InventoryPickerDialog({ open, onClose, onSelect }: Props
   useEffect(() => { setOffset(0); }, [debouncedQuery]);
 
   useEffect(() => {
+    const refreshCatalog = () => setCatalogVersion(version => version + 1);
+    window.addEventListener(INVENTORY_CATALOG_UPDATED_EVENT, refreshCatalog);
+    return () => window.removeEventListener(INVENTORY_CATALOG_UPDATED_EVENT, refreshCatalog);
+  }, []);
+
+  useEffect(() => {
     if (!open) return;
+    let cancelled = false;
     setLoading(true);
+    setLoadError("");
     searchInventory(debouncedQuery, PAGE_SIZE, offset)
-      .then(({ items, total }) => { setItems(items); setTotal(total); })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [open, debouncedQuery, offset]);
+      .then(({ items, total }) => {
+        if (cancelled) return;
+        setItems(items);
+        setTotal(total);
+      })
+      .catch(caught => {
+        if (cancelled) return;
+        setItems([]);
+        setTotal(0);
+        setLoadError(caught instanceof Error ? caught.message : "No se pudo cargar el catálogo.");
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, debouncedQuery, offset, catalogVersion]);
 
   const handleSelect = useCallback((item: InventoryItem) => {
     setSelected(item.inventory_id);
@@ -101,7 +125,13 @@ export default function InventoryPickerDialog({ open, onClose, onSelect }: Props
 
         {/* Lista */}
         <div className="overflow-y-auto flex-1 px-3 py-2">
-          {items.length === 0 && !loading ? (
+          {loadError && !loading ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center text-[var(--danger)]">
+              <PackageSearch className="w-10 h-10 mb-3 opacity-70" />
+              <p className="text-sm">No se pudo cargar el catálogo.</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">{loadError}</p>
+            </div>
+          ) : items.length === 0 && !loading ? (
             <div className="flex flex-col items-center justify-center py-12 text-[var(--text-muted)]">
               <PackageSearch className="w-10 h-10 mb-3 opacity-30" />
               <p className="text-sm">
